@@ -102,6 +102,7 @@ export const NAV_REPLAN_MS = 150;
 export const NAV_BLOCK_RADIUS = 0.55;
 export const NAV_STATIC_OBSTACLE_PREFIXES = [
   "sofa",
+  "散台沙发",
   "counter",
   "wall",
   "fridge",

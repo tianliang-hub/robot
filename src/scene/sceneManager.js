@@ -400,7 +400,7 @@ export function createSceneManager({ logger }) {
     await runStage(1);
     await new Promise((resolve) => setTimeout(resolve, 30));
     await runStage(2);
-    projectStaticObstacles(staticPlans);
+    projectStaticObstacles([...actorPlans, ...staticPlans]);
     updateLoadProgress(1);
   }
 
@@ -463,6 +463,7 @@ export function createSceneManager({ logger }) {
 
   function shouldProjectStaticObstacle(name) {
     const normalized = String(name || "").toLowerCase();
+    if (normalized.startsWith("锚点-桌台")) return true;
     return NAV_STATIC_OBSTACLE_PREFIXES.some((prefix) =>
       normalized.startsWith(String(prefix).toLowerCase())
     );

@@ -218,6 +218,17 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       }
 
       const rawPath = pathPlanner.findPath(current, resolvedTarget);
+      const targetDistance = current.distanceTo(resolvedTarget);
+      if (rawPath.length <= 1 || targetDistance <= 0.08) {
+        if (targetDistance > 0.02) {
+          await sceneManager.moveAnchor("waiter", resolvedTarget, Math.max(90, Math.round(duration * 0.25)), {
+            withPath: false,
+            faceToMove,
+            stopDistance
+          });
+        }
+        return;
+      }
       const waypoints = rawPath.slice(1);
       if (waypoints.length === 0) {
         if (!unreachableLogged) {
@@ -431,18 +442,34 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
         setTableStatus(key, "waiting", `桌台${key}状态切换：空闲 -> 等餐中`);
       }
       enqueueDemandForTable(key, "点餐", "smart");
-      if (!hasSameTask("点餐", key)) addTask("点餐", key, TASK_PRIORITY["点餐"], "smart", true);
-      return;
+      if (hasSameTask("点餐", key)) return true;
+      const task = addTask("点餐", key, TASK_PRIORITY["点餐"], "smart", true);
+      if (!task) {
+        logger.log(`[智能对话] 桌台${key}点餐任务注入失败（队列保护或条件限制），本轮先回待命位。`);
+        return false;
+      }
+      return true;
     }
     if (intent === "water") {
       enqueueDemandForTable(key, "送水", "smart");
-      addTask("送水", key, TASK_PRIORITY["送水"], "smart", true);
-      return;
+      const task = addTask("送水", key, TASK_PRIORITY["送水"], "smart", true);
+      if (!task) {
+        logger.log(`[智能对话] 桌台${key}送水任务注入失败（队列保护或条件限制），本轮先回待命位。`);
+        return false;
+      }
+      return true;
     }
     if (intent === "checkout") {
       enqueueDemandForTable(key, "结账", "smart");
-      if (!hasSameTask("结账", key)) addTask("结账", key, TASK_PRIORITY["结账"], "smart", true);
+      if (hasSameTask("结账", key)) return true;
+      const task = addTask("结账", key, TASK_PRIORITY["结账"], "smart", true);
+      if (!task) {
+        logger.log(`[智能对话] 桌台${key}结账任务注入失败（队列保护或条件限制），本轮先回待命位。`);
+        return false;
+      }
+      return true;
     }
+    return false;
   }
 
   function findDemandDecayReason(customer) {
@@ -710,7 +737,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     await waitConversationEnd();
     setConversationState("resuming");
     const nextIntent = state.chat.pendingIntent || intent;
-    enqueueFollowupByIntent(task.tableId, nextIntent);
+    const hasFollowupTask = enqueueFollowupByIntent(task.tableId, nextIntent);
     patchChat({
       active: false,
       tableId: null,
@@ -720,6 +747,10 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       isWaitingReply: false
     });
     setConversationState("idle");
+    if (!hasFollowupTask && state.taskQueue.length === 0) {
+      logger.log("[智能对话] 当前无后续任务，服务员返回待命位。");
+      await returnWaiterToStandby("智能对话后无后续任务，回待命位");
+    }
     logger.log("[智能对话] 对话结束，继续执行业务任务。");
   }
 
