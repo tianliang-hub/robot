@@ -114,6 +114,20 @@ export function createPathPlanner(options = {}) {
     return null;
   }
 
+  function resolveReachableTarget(worldTarget, worldStart = null) {
+    const targetCellRaw = worldToCell(worldTarget);
+    const resolvedCell = pickNearestOpenCell(targetCellRaw);
+    if (!resolvedCell) return null;
+    const targetWorld = cellToWorld(
+      resolvedCell,
+      (worldTarget && typeof worldTarget.y === "number" ? worldTarget.y : 0)
+    );
+    if (worldStart && worldStart.distanceTo(targetWorld) < 1e-3) {
+      return worldTarget.clone();
+    }
+    return targetWorld;
+  }
+
   function reconstructPath(cameFrom, currentKey) {
     const cellList = [parseCellKey(currentKey)];
     let cursor = currentKey;
@@ -213,6 +227,7 @@ export function createPathPlanner(options = {}) {
     setBlockedByWorld,
     replaceBlockedCells,
     getBlockedCells,
-    findPath
+    findPath,
+    resolveReachableTarget
   };
 }

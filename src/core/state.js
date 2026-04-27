@@ -1,10 +1,13 @@
-import { CUSTOMER_BINDINGS, EMOTION_CONFIG, SCENARIO_PRESETS } from "../config/appConfig.js";
+import { CUSTOMER_BINDINGS, EMOTION_CONFIG, SCENE_POINTS, SCENARIO_PRESETS } from "../config/appConfig.js";
 
 export function createStateStore() {
   const listeners = new Set();
+  const tableStatus = Object.fromEntries(
+    Object.keys(SCENE_POINTS.tables || {}).map((tableId) => [String(tableId), "idle"])
+  );
   const state = {
     taskQueue: [],
-    tableStatus: { "1": "idle", "2": "idle" },
+    tableStatus,
     customers: CUSTOMER_BINDINGS.map((item) => ({
       id: item.id,
       name: item.name,

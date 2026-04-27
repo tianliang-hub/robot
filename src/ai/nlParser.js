@@ -12,9 +12,9 @@ export function parseNaturalCommand(text) {
     return { ok: false, message: "请输入指令文本。" };
   }
 
-  const tableMatch = cleaned.match(/([12])号桌/);
+  const tableMatch = cleaned.match(/([1-4])号桌/);
   if (!tableMatch) {
-    return { ok: false, message: "未识别桌台编号，请包含“1号桌”或“2号桌”。" };
+    return { ok: false, message: "未识别桌台编号，请包含“1号桌~4号桌”。" };
   }
   const tableId = tableMatch[1];
 

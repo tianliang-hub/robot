@@ -6,10 +6,12 @@ import { parseNaturalCommand } from "../ai/nlParser.js";
 export function createUIController({ store, scheduler, logger, replayRecorder }) {
   const chefStatusEl = document.getElementById("chef-status");
   const waiterStatusEl = document.getElementById("waiter-status");
-  const tableStateEls = {
-    "1": document.getElementById("table-state-1"),
-    "2": document.getElementById("table-state-2")
-  };
+  const tableStateEls = Object.fromEntries(
+    Array.from(document.querySelectorAll("[id^='table-state-']")).map((el) => {
+      const tableId = String(el.id).replace("table-state-", "");
+      return [tableId, el];
+    })
+  );
   const taskListEl = document.getElementById("task-list");
   const cmdInput = document.getElementById("cmd-input");
   const cmdSendBtn = document.getElementById("cmd-send");
@@ -55,9 +57,14 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
     waiterStatusEl.textContent = robotStateMap[state.waiterState] || state.waiterState;
 
     Object.keys(tableStateEls).forEach((tableId) => {
+      if (!tableStateEls[tableId]) return;
       const status = state.tableStatus[tableId];
-      tableStateEls[tableId].textContent = TABLE_STATE_LABEL[status] || status;
-      tableStateEls[tableId].className = `table-state ${status}`;
+      const hasCustomer = scheduler.tableHasCustomer(tableId);
+      const label = TABLE_STATE_LABEL[status] || status;
+      tableStateEls[tableId].textContent = hasCustomer ? label : `${label}（空桌不可下单）`;
+      tableStateEls[tableId].className = hasCustomer
+        ? `table-state ${status}`
+        : `table-state ${status} empty-table`;
     });
 
     taskListEl.innerHTML = "";
@@ -76,7 +83,13 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
     buttons.forEach((btn) => {
       const tableId = btn.dataset.table;
       const action = btn.dataset.action;
-      btn.disabled = !scheduler.isActionAllowed(state.tableStatus[tableId], action);
+      const hasCustomer = scheduler.tableHasCustomer(tableId);
+      btn.disabled =
+        !hasCustomer || !scheduler.isActionAllowed(state.tableStatus[tableId], action);
+    });
+    smartButtons.forEach((btn) => {
+      const tableId = btn.dataset.table;
+      btn.disabled = !scheduler.tableHasCustomer(tableId);
     });
 
     const selected = state.customers.find((item) => item.id === state.selectedCustomerId) || null;
@@ -221,7 +234,9 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
 
   function bindChatPanel() {
     globalChatBtn.addEventListener("click", () => {
-      scheduler.startSmartConversation("1", "order", "global");
+      const fallbackTableId =
+        store.state.customers[0]?.tableId || Object.keys(store.state.tableStatus)[0] || "1";
+      scheduler.startSmartConversation(fallbackTableId, "order", "global");
     });
 
     chatModeSelect.addEventListener("change", () => {

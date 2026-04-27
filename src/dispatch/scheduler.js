@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import {
   CUSTOMER_DEMAND_TEMPLATES,
   EMOTION_CONFIG,
@@ -24,6 +25,18 @@ const SMART_INTENT_BY_TASK = {
   智能送水: "water",
   智能结账: "checkout"
 };
+
+const TABLE_BOUND_TASKS = new Set([
+  "点餐",
+  "送水",
+  "结账",
+  "收餐",
+  "冰箱取货",
+  "情绪安抚",
+  "智能点单",
+  "智能送水",
+  "智能结账"
+]);
 
 export function createScheduler({ store, sceneManager, logger, metrics, advisor }) {
   const { state } = store;
@@ -53,6 +66,12 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
   }
 
   function addTask(type, tableId, priority = TASK_PRIORITY[type], source = "ui", silent = false) {
+    if (TABLE_BOUND_TASKS.has(type) && !tableHasCustomer(String(tableId))) {
+      if (!silent) {
+        logger.log(`[空桌保护] 桌台${tableId}未绑定顾客，已忽略${type}任务。`);
+      }
+      return null;
+    }
     if (
       (type === "点餐" || type === "智能点单") &&
       state.taskQueue.length >= FLOW_CONFIG.waiterQueueGuardMax &&
@@ -108,6 +127,60 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     return Math.round(base * state.delays.moveScale);
   }
 
+  function getCustomerCenterPoint() {
+    const tables = Object.values(SCENE_POINTS.tables || {});
+    if (tables.length === 0) return new THREE.Vector3(0, 0, 6);
+    const sum = tables.reduce(
+      (acc, point) => {
+        acc.x += point.x;
+        acc.z += point.z;
+        return acc;
+      },
+      { x: 0, z: 0 }
+    );
+    return new THREE.Vector3(sum.x / tables.length, 0, sum.z / tables.length);
+  }
+
+  function faceWaiterToCustomers() {
+    sceneManager.setAnchorFacing?.("waiter", getCustomerCenterPoint());
+  }
+
+  function faceChefToCounter() {
+    const chefPos = sceneManager.anchors.chef?.position || SCENE_POINTS.chef;
+    const counterFacing = new THREE.Vector3(chefPos.x, 0, chefPos.z + 2.2);
+    sceneManager.setAnchorFacing?.("chef", counterFacing);
+  }
+
+  function isWaiterAtStandby() {
+    const waiterPos = sceneManager.anchors.waiter?.position;
+    if (!waiterPos) return false;
+    return waiterPos.distanceTo(SCENE_POINTS.standby) <= 0.42;
+  }
+
+  async function returnWaiterToStandby(reason = "") {
+    setWaiterState("returning");
+    await moveWaiterWithReplan(SCENE_POINTS.standby, getMoveDuration(760), {
+      withPath: true,
+      faceToMove: true,
+      stopDistance: 0,
+      routeLabel: reason || "回待命位"
+    });
+    setWaiterState("idle");
+    faceWaiterToCustomers();
+  }
+
+  async function waitForWaiterStandbyBeforeChef(orderTableId) {
+    if (isWaiterAtStandby() && state.waiterState === "idle") return;
+    logger.log(`[协同] 等待服务员回到待命位后启动烹饪（桌台${orderTableId}）`);
+    while (true) {
+      if (isWaiterAtStandby() && state.waiterState === "idle") {
+        logger.log("[协同] 服务员已回位，厨师前往微波炉烹饪。");
+        return;
+      }
+      await waitMs(120);
+    }
+  }
+
   function isRemainingPathBlocked(pathPoints) {
     for (let i = 0; i < pathPoints.length; i += 1) {
       const cell = pathPlanner.worldToCell(pathPoints[i]);
@@ -120,14 +193,31 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     const {
       withPath = true,
       faceToMove = true,
-      stopDistance = 0
+      stopDistance = 0,
+      routeLabel = ""
     } = options;
     const destination = target.clone();
     let unreachableLogged = false;
+    let routeLogged = false;
 
     while (true) {
       const current = sceneManager.anchors.waiter.position.clone();
-      const rawPath = pathPlanner.findPath(current, destination);
+      const resolvedTarget = pathPlanner.resolveReachableTarget(destination, current);
+      if (!resolvedTarget) {
+        if (!unreachableLogged) {
+          logger.log("[路径规划] 当前不可达，等待障碍移除后重试");
+          unreachableLogged = true;
+        }
+        await waitMs(NAV_REPLAN_MS);
+        continue;
+      }
+      const targetCell = pathPlanner.worldToCell(destination);
+      const resolvedCell = pathPlanner.worldToCell(resolvedTarget);
+      if ((targetCell.x !== resolvedCell.x || targetCell.z !== resolvedCell.z) && !routeLogged && routeLabel) {
+        logger.log(`[路径规划] ${routeLabel}目标格被占用，已回退到最近可达格(${resolvedCell.x},${resolvedCell.z})`);
+      }
+
+      const rawPath = pathPlanner.findPath(current, resolvedTarget);
       const waypoints = rawPath.slice(1);
       if (waypoints.length === 0) {
         if (!unreachableLogged) {
@@ -141,6 +231,10 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       if (unreachableLogged) {
         logger.log("[路径规划] 目标已恢复可达，继续前进");
         unreachableLogged = false;
+      }
+      if (!routeLogged && routeLabel && waypoints.length > 1) {
+        logger.log(`[路径规划] ${routeLabel}链路绕障生效，节点 ${waypoints.length}`);
+        routeLogged = true;
       }
 
       const thisPlanVersion = obstacleVersion;
@@ -378,15 +472,39 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     chefLoopRunning = true;
     while (chefOrderQueue.length > 0) {
       const order = chefOrderQueue.shift();
-      setChefState("cooking");
-      logger.log(`[点餐] 厨师开始制作桌台${order.tableId}餐品（${state.delays.cookMs / 1000}s）`);
-      await waitMs(state.delays.cookMs);
+      const platingMs = Math.max(0, FLOW_CONFIG.plateAtTransferMs ?? 400);
+      await waitForWaiterStandbyBeforeChef(order.tableId);
       setChefState("toTransfer");
-      await sceneManager.moveAnchor("chef", SERVICE_POINTS.transferChef, getMoveDuration(900), { faceToMove: true });
+      logger.log(`[点餐] 厨师前往烹饪位处理桌台${order.tableId}工单`);
+      await sceneManager.moveAnchor(
+        "chef",
+        SERVICE_POINTS.cookStation || SCENE_POINTS.chef,
+        getMoveDuration(820),
+        { faceToMove: true, stopDistance: 0.55 }
+      );
+      setChefState("cooking");
+      logger.log(
+        `[点餐] 厨师开始制作桌台${order.tableId}餐品（烹饪${(state.delays.cookMs / 1000).toFixed(1)}s + 摆盘${(platingMs / 1000).toFixed(1)}s）`
+      );
+      await waitMs(state.delays.cookMs);
+      if (platingMs > 0) {
+        logger.log(`[点餐] 厨师正在完成桌台${order.tableId}摆盘，准备短距出餐`);
+        await waitMs(platingMs);
+      }
+      setChefState("toTransfer");
+      await sceneManager.moveAnchor(
+        "chef",
+        SERVICE_POINTS.transferChefNear || SERVICE_POINTS.transferChef,
+        getMoveDuration(760),
+        { faceToMove: true }
+      );
       logger.log(`[点餐] 厨师已完成桌台${order.tableId}出餐，等待服务员取餐`);
       addTask("送餐", order.tableId, TASK_PRIORITY["送餐"], "chef", true);
       setChefState("returning");
-      await sceneManager.moveAnchor("chef", SCENE_POINTS.chef, getMoveDuration(900));
+      await sceneManager.moveAnchor("chef", SCENE_POINTS.chef, getMoveDuration(760), {
+        faceToMove: true
+      });
+      faceChefToCounter();
       setChefState("idle");
     }
     chefLoopRunning = false;
@@ -398,22 +516,25 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     await moveWaiterWithReplan(SERVICE_POINTS.tableService[task.tableId], getMoveDuration(900), {
       withPath: true,
       faceToMove: true,
-      stopDistance: ROBOT_SAFE_DISTANCE * 0.2
+      stopDistance: ROBOT_SAFE_DISTANCE * 0.2,
+      routeLabel: "点餐确认"
     });
     sceneManager.playActorAction?.("waiter", "confirm");
     await waitMs(FLOW_CONFIG.confirmAtTableMs);
 
+    logger.log(`[点餐] 桌台${task.tableId}点单信息已登记，通知厨师开始处理。`);
+    enqueueChefOrder(task.tableId);
     setWaiterState("reporting");
-    logger.log(`[点餐] 服务员向厨师汇报桌台${task.tableId}点单信息`);
-    await moveWaiterWithReplan(SCENE_POINTS.chef, getMoveDuration(850), {
+    await moveWaiterWithReplan(SERVICE_POINTS.transferReport || SERVICE_POINTS.transferPickup, getMoveDuration(520), {
       withPath: true,
       faceToMove: true,
-      stopDistance: ROBOT_SAFE_DISTANCE * 0.3
+      stopDistance: ROBOT_SAFE_DISTANCE * 0.15
     });
     sceneManager.playActorAction?.("waiter", "report");
-    await waitMs(FLOW_CONFIG.reportToChefMs);
-    enqueueChefOrder(task.tableId);
-    logger.log(`[点餐] 已将桌台${task.tableId}加入厨师工单队列，服务员继续处理其它任务`);
+    await waitMs(Math.max(220, Math.round(FLOW_CONFIG.reportToChefMs * 0.35)));
+    logger.log(`[点餐] 服务员已完成桌台${task.tableId}报单，回待命位准备衔接出餐。`);
+    await returnWaiterToStandby("报单后回待命位");
+    logger.log(`[点餐] 服务员已回待命位，期间可继续处理其它任务。`);
   }
 
   async function handleDeliverTask(task) {
@@ -422,7 +543,8 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     await moveWaiterWithReplan(SERVICE_POINTS.transferPickup, getMoveDuration(1000), {
       withPath: true,
       faceToMove: true,
-      stopDistance: 0.15
+      stopDistance: 0.15,
+      routeLabel: "取餐"
     });
     sceneManager.playActorAction?.("waiter", "pickup");
     await waitMs(320);
@@ -431,7 +553,8 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     await moveWaiterWithReplan(SERVICE_POINTS.tableService[task.tableId], getMoveDuration(1400), {
       withPath: true,
       faceToMove: true,
-      stopDistance: ROBOT_SAFE_DISTANCE * 0.2
+      stopDistance: ROBOT_SAFE_DISTANCE * 0.2,
+      routeLabel: "送餐配送"
     });
     sceneManager.playActorAction?.("waiter", "serve");
     setTableStatus(task.tableId, "eating", `[送餐] 餐品已送达桌台${task.tableId}，状态切换为就餐中`);
@@ -615,13 +738,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     if (task.type === "情绪安抚") await handleSootheTask(task);
     if (task.type === "结账") await handleCheckoutTask(task);
     if (task.type === "收餐") await handleCleanupTask(task);
-    setWaiterState("returning");
-    await moveWaiterWithReplan(SCENE_POINTS.standby, getMoveDuration(1000), {
-      withPath: true,
-      faceToMove: true,
-      stopDistance: 0
-    });
-    setWaiterState("idle");
+    await returnWaiterToStandby("任务结束回待命位");
   }
 
   async function startWaiterDispatchLoop() {
@@ -659,6 +776,10 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
 
   function handleAction(action, tableId) {
     const key = String(tableId);
+    if (!tableHasCustomer(key)) {
+      logger.log(`[空桌保护] 桌台${key}无顾客，无法点单/结账/服务操作。`);
+      return false;
+    }
     const status = state.tableStatus[key];
     if (!isActionAllowed(status, action)) {
       advisor.explainStateConflict(`桌台${key}当前为${TABLE_STATE_LABEL[status]}，不能执行动作${action}`);
@@ -825,17 +946,25 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     state.scenario = mode;
     state.delays = { ...preset.delays };
     logger.log(`[模式] 已切换到${preset.name}`);
+    const tableIds = Object.keys(state.tableStatus);
     if (mode === "lunchRush") {
-      addTask("点餐", "1", TASK_PRIORITY["点餐"], "scenario", true);
-      addTask("点餐", "2", TASK_PRIORITY["点餐"], "scenario", true);
-      if (state.tableStatus["1"] === "idle") state.tableStatus["1"] = "waiting";
-      if (state.tableStatus["2"] === "idle") state.tableStatus["2"] = "waiting";
-      logger.log("[模式] 午高峰已注入两桌点餐任务");
+      let injectCount = 0;
+      tableIds.forEach((tableId) => {
+        if (!tableHasCustomer(tableId)) return;
+        const t = addTask("点餐", tableId, TASK_PRIORITY["点餐"], "scenario", true);
+        if (t) injectCount += 1;
+        if (t && state.tableStatus[tableId] === "idle") state.tableStatus[tableId] = "waiting";
+      });
+      logger.log(`[模式] 午高峰已注入${injectCount}桌点餐任务（有顾客桌）`);
     }
     if (mode === "emergency") {
-      addTask("送水", "1", TASK_PRIORITY["送水"], "scenario", true);
-      addTask("送水", "2", TASK_PRIORITY["送水"], "scenario", true);
-      logger.log("[模式] 突发事件已注入紧急送水任务");
+      let injectCount = 0;
+      tableIds.forEach((tableId) => {
+        if (!tableHasCustomer(tableId)) return;
+        const t = addTask("送水", tableId, TASK_PRIORITY["送水"], "scenario", true);
+        if (t) injectCount += 1;
+      });
+      logger.log(`[模式] 突发事件已注入${injectCount}桌紧急送水任务（有顾客桌）`);
     }
     store.notify();
   }
@@ -855,6 +984,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     startEmotionEngine,
     runDemoScript,
     isActionAllowed,
+    tableHasCustomer,
     updateDynamicObstacles
   };
 }

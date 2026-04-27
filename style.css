@@ -85,7 +85,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .panel-title {
@@ -183,6 +184,12 @@ body {
 
 .table-state.cleaning {
   color: #e38693;
+}
+
+.table-state.empty-table {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: normal;
 }
 
 .action-grid {

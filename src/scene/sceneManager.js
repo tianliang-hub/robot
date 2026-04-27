@@ -4,6 +4,8 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   MODEL_QUALITY,
   NAV_GRID,
+  NAV_STATIC_OBSTACLE_PADDING,
+  NAV_STATIC_OBSTACLE_PREFIXES,
   RAYCAST_THROTTLE_MS,
   SCENE_POINTS,
   WAITER_TURN_SPEED
@@ -94,15 +96,17 @@ export function createSceneManager({ logger }) {
     waiter: createAnchor(0x3a7bff, SCENE_POINTS.standby),
     transfer: createAnchor(0xffd24a, SCENE_POINTS.transferZone),
     recycle: createAnchor(0x555555, SCENE_POINTS.recycleZone),
-    water: createCylinderAnchor(0xffffff, SCENE_POINTS.waterPoint),
-    table1: createCylinderAnchor(0x39d67a, SCENE_POINTS.tables["1"]),
-    table2: createCylinderAnchor(0x39d67a, SCENE_POINTS.tables["2"])
+    water: createCylinderAnchor(0xffffff, SCENE_POINTS.waterPoint)
   };
-  anchors.table1.userData.tableId = "1";
-  anchors.table2.userData.tableId = "2";
+  const tableAnchorKeys = Object.entries(SCENE_POINTS.tables || {}).map(([tableId, pos]) => {
+    const key = `table${tableId}`;
+    anchors[key] = createCylinderAnchor(0x39d67a, pos);
+    anchors[key].userData.tableId = String(tableId);
+    return key;
+  });
 
   const editableTargets = [];
-  const clickableTables = [anchors.table1, anchors.table2];
+  const clickableTables = tableAnchorKeys.map((key) => anchors[key]).filter(Boolean);
   const clickableCustomers = [];
   const modelRefs = new Map();
   const actorRigs = new Map();
@@ -110,6 +114,7 @@ export function createSceneManager({ logger }) {
   const customerMoodVisuals = new Map();
   const customerBehaviors = new Map();
   const obstacleMarkers = new Map();
+  const staticObstacleCells = new Set();
 
   const quality = resolveQuality();
   dirLight.castShadow = true;
@@ -194,10 +199,26 @@ export function createSceneManager({ logger }) {
   }
 
   async function spawnStaticModel(plan, parent = scene) {
-    const gltf = await loadGLB(plan.url);
+    let gltf = null;
+    let usedFallback = false;
+    try {
+      gltf = await loadGLB(plan.url);
+    } catch (error) {
+      if (!plan.fallbackUrl) throw error;
+      gltf = await loadGLB(plan.fallbackUrl);
+      usedFallback = true;
+      if (String(plan.name || "").includes("充电桩")) {
+        logger.log("[模型] 充电桩缺失，已回退椅子占位");
+      } else {
+        logger.log(`[模型] ${plan.name} 主模型加载失败，已回退占位模型`);
+      }
+    }
     const model = gltf.scene;
-    model.scale.setScalar(plan.scale ?? 1);
-    if (typeof plan.rotationY === "number") model.rotation.y = plan.rotationY;
+    model.scale.setScalar(usedFallback ? (plan.fallbackScale ?? plan.scale ?? 1) : (plan.scale ?? 1));
+    const rotationY = usedFallback
+      ? (typeof plan.fallbackRotationY === "number" ? plan.fallbackRotationY : plan.rotationY)
+      : plan.rotationY;
+    if (typeof rotationY === "number") model.rotation.y = rotationY;
     normalizeToGround(model);
     model.position.set(plan.pos[0], plan.pos[1], plan.pos[2]);
     applyShadowFlags(model, plan.importance, model.position);
@@ -309,7 +330,7 @@ export function createSceneManager({ logger }) {
   }
 
   function setTableMoodVisual(tableId, mood) {
-    const anchor = String(tableId) === "1" ? anchors.table1 : anchors.table2;
+    const anchor = anchors[`table${String(tableId)}`];
     if (!anchor) return;
     anchor.traverse((child) => {
       if (!child.isMesh) return;
@@ -379,6 +400,7 @@ export function createSceneManager({ logger }) {
     await runStage(1);
     await new Promise((resolve) => setTimeout(resolve, 30));
     await runStage(2);
+    projectStaticObstacles(staticPlans);
     updateLoadProgress(1);
   }
 
@@ -424,15 +446,52 @@ export function createSceneManager({ logger }) {
     );
   }
 
-  function getObstacleCells() {
-    return Array.from(obstacleMarkers.keys()).map((key) => {
-      const [x, z] = key.split(",").map((value) => Number(value));
-      return { x, z };
-    });
+  function parseCellKey(key) {
+    const [x, z] = String(key).split(",").map((value) => Number(value));
+    return { x, z };
+  }
+
+  function getAllObstacleCells() {
+    const merged = new Set(staticObstacleCells);
+    obstacleMarkers.forEach((_marker, key) => merged.add(key));
+    return Array.from(merged).map((key) => parseCellKey(key));
   }
 
   function emitObstacleChanged() {
-    if (onObstacleChanged) onObstacleChanged(getObstacleCells());
+    if (onObstacleChanged) onObstacleChanged(getAllObstacleCells());
+  }
+
+  function shouldProjectStaticObstacle(name) {
+    const normalized = String(name || "").toLowerCase();
+    return NAV_STATIC_OBSTACLE_PREFIXES.some((prefix) =>
+      normalized.startsWith(String(prefix).toLowerCase())
+    );
+  }
+
+  function projectStaticObstacles(staticPlans = []) {
+    staticObstacleCells.clear();
+    staticPlans.forEach((plan) => {
+      if (!shouldProjectStaticObstacle(plan.name)) return;
+      const model = modelRefs.get(plan.name);
+      if (!model) return;
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      if (box.isEmpty()) return;
+
+      const minX = box.min.x - NAV_STATIC_OBSTACLE_PADDING;
+      const maxX = box.max.x + NAV_STATIC_OBSTACLE_PADDING;
+      const minZ = box.min.z - NAV_STATIC_OBSTACLE_PADDING;
+      const maxZ = box.max.z + NAV_STATIC_OBSTACLE_PADDING;
+      const minCell = worldToNavCell(new THREE.Vector3(minX, 0, minZ));
+      const maxCell = worldToNavCell(new THREE.Vector3(maxX, 0, maxZ));
+      for (let z = minCell.z; z <= maxCell.z; z += 1) {
+        for (let x = minCell.x; x <= maxCell.x; x += 1) {
+          staticObstacleCells.add(navCellKey({ x, z }));
+        }
+      }
+    });
+    logger.log(`[导航投影] 已投影静态障碍单元 ${staticObstacleCells.size}`);
+    emitObstacleChanged();
   }
 
   function getGroundHitPoint(event) {
@@ -725,6 +784,15 @@ export function createSceneManager({ logger }) {
     if (withPath) clearPathLine();
   }
 
+  function setAnchorFacing(anchorKey, targetPoint) {
+    const anchor = anchors[anchorKey];
+    if (!anchor || !targetPoint) return;
+    const dir = targetPoint.clone().sub(anchor.position);
+    dir.y = 0;
+    if (dir.lengthSq() <= 1e-6) return;
+    anchor.rotation.y = Math.atan2(dir.x, dir.z);
+  }
+
   function animate() {
     const now = performance.now();
     const delta = Math.min((now - startedAt) / 1000, 0.1);
@@ -789,6 +857,7 @@ export function createSceneManager({ logger }) {
     loadModelsInStages,
     animate,
     moveAnchor,
+    setAnchorFacing,
     clearPathLine,
     setGridVisible(visible) {
       gridHelper.visible = Boolean(visible);
