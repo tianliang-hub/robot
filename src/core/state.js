@@ -17,6 +17,16 @@ export function createStateStore() {
       visiblePanel: false
     })),
     selectedCustomerId: null,
+    chat: {
+      active: false,
+      mode: "table",
+      tableId: null,
+      sessionId: "",
+      messages: [],
+      pendingIntent: null,
+      isWaitingReply: false
+    },
+    waiterConversationState: "idle",
     chefState: "idle",
     waiterState: "idle",
     isDispatching: false,

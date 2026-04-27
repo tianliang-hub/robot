@@ -5,6 +5,8 @@
   "main": "main.js",
   "scripts": {
     "dev": "vite",
+    "dev:server": "node server/chatProxy.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
     "build": "vite build",
     "preview": "vite preview",
     "test": "echo \"No automated tests yet\""
@@ -14,10 +16,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "dotenv": "^17.4.2",
     "lil-gui": "^0.21.0",
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "vite": "^8.0.10"
   }
 }

@@ -83,6 +83,14 @@ export const SERVICE_POINTS = {
 
 export const ROBOT_SAFE_DISTANCE = 0.75;
 export const WAITER_TURN_SPEED = 10;
+export const NAV_GRID = {
+  width: 36,
+  depth: 36,
+  cellSize: 0.8,
+  origin: new THREE.Vector3(0, 0, 0)
+};
+export const NAV_REPLAN_MS = 150;
+export const NAV_BLOCK_RADIUS = 0.55;
 
 export const FLOW_CONFIG = {
   confirmAtTableMs: 900,

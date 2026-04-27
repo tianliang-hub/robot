@@ -1,4 +1,6 @@
 import { CUSTOMER_MOOD_LABEL, TABLE_STATE_LABEL } from "../config/appConfig.js";
+import { sendMessage } from "../ai/chatClient.js";
+import { extractIntent } from "../ai/intentExtractor.js";
 import { parseNaturalCommand } from "../ai/nlParser.js";
 
 export function createUIController({ store, scheduler, logger, replayRecorder }) {
@@ -16,6 +18,7 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
   const replayBtn = document.getElementById("replay-btn");
   const demoScriptBtn = document.getElementById("demo-script-btn");
   const buttons = Array.from(document.querySelectorAll(".task-btn[data-action]"));
+  const smartButtons = Array.from(document.querySelectorAll(".task-btn[data-smart-action]"));
   const customerPanel = document.getElementById("customer-panel");
   const customerPanelTitle = document.getElementById("customer-panel-title");
   const customerPanelTable = document.getElementById("customer-panel-table");
@@ -27,6 +30,13 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
   const customerCheckoutBtn = document.getElementById("customer-checkout-btn");
   const customerSootheBtn = document.getElementById("customer-soothe-btn");
   const customerPanelClose = document.getElementById("customer-panel-close");
+  const globalChatBtn = document.getElementById("global-chat-btn");
+  const chatPanel = document.getElementById("chat-panel");
+  const chatMessages = document.getElementById("chat-messages");
+  const chatInput = document.getElementById("chat-input");
+  const chatSendBtn = document.getElementById("chat-send-btn");
+  const chatEndBtn = document.getElementById("chat-end-btn");
+  const chatModeSelect = document.getElementById("chat-mode-select");
 
   function render(state) {
     const robotStateMap = {
@@ -81,12 +91,36 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
       customerPanelPatience.textContent = `${patiencePct}%`;
       customerPatienceFill.style.transform = `scaleX(${Math.max(0.04, patiencePct / 100)})`;
     }
+
+    if (state.chat.active || state.chat.messages.length > 0) {
+      chatPanel.classList.remove("hidden");
+    } else {
+      chatPanel.classList.add("hidden");
+    }
+    chatModeSelect.value = state.chat.mode || "table";
+    chatSendBtn.disabled = !state.chat.active || state.chat.isWaitingReply;
+    chatEndBtn.disabled = !state.chat.active;
+    chatInput.disabled = !state.chat.active;
+    chatMessages.innerHTML = "";
+    state.chat.messages.forEach((entry) => {
+      const div = document.createElement("div");
+      div.className = `chat-msg ${entry.role}`;
+      div.textContent = `${entry.role === "user" ? "我" : "服务员"}：${entry.content}`;
+      chatMessages.appendChild(div);
+    });
+    chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
   function bindButtons() {
     buttons.forEach((btn) => {
       btn.addEventListener("click", () => {
         scheduler.handleAction(btn.dataset.action, btn.dataset.table);
+      });
+    });
+    smartButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = chatModeSelect.value || "table";
+        scheduler.startSmartConversation(btn.dataset.table, btn.dataset.smartAction, mode);
       });
     });
   }
@@ -178,11 +212,80 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
     });
   }
 
+  function buildHistoryMessages(state) {
+    return state.chat.messages.map((item) => ({
+      role: item.role,
+      content: item.content
+    }));
+  }
+
+  function bindChatPanel() {
+    globalChatBtn.addEventListener("click", () => {
+      scheduler.startSmartConversation("1", "order", "global");
+    });
+
+    chatModeSelect.addEventListener("change", () => {
+      store.patch({
+        chat: {
+          ...store.state.chat,
+          mode: chatModeSelect.value
+        }
+      });
+    });
+
+    async function sendChatText() {
+      const text = chatInput.value.trim();
+      if (!text || !store.state.chat.active) return;
+
+      scheduler.appendChatMessage("user", text);
+      chatInput.value = "";
+      const parsedIntent = extractIntent(text);
+      if (parsedIntent.type === "end_chat") {
+        scheduler.endChatConversation("用户输入聊天结束");
+        return;
+      }
+      if (parsedIntent.type === "intent_switch") {
+        scheduler.updateChatPendingIntent(parsedIntent.intent);
+        logger.log(`[智能意图] 对话中识别到意图切换：${parsedIntent.intent}`);
+      }
+
+      scheduler.setChatWaiting(true);
+      try {
+        const state = store.state;
+        const reply = await sendMessage({
+          mode: state.chat.mode || "table",
+          tableId: state.chat.tableId || "0",
+          sessionId: state.chat.sessionId,
+          text,
+          history: buildHistoryMessages(state)
+        });
+        scheduler.appendChatMessage("assistant", reply);
+      } catch (error) {
+        scheduler.appendChatMessage(
+          "assistant",
+          "网络有点忙，我先记下你的需求。你可以继续说，或者输入“聊天结束”。"
+        );
+        logger.log(`[智能对话] 远端响应失败，已使用本地兜底：${error instanceof Error ? error.message : "未知错误"}`);
+      } finally {
+        scheduler.setChatWaiting(false);
+      }
+    }
+
+    chatSendBtn.addEventListener("click", sendChatText);
+    chatInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") sendChatText();
+    });
+    chatEndBtn.addEventListener("click", () => {
+      scheduler.endChatConversation("点击结束按钮");
+    });
+  }
+
   function mount({ onCustomerSelected } = {}) {
     bindButtons();
     bindCommandInput();
     bindScenarioControls();
     bindCustomerPanel();
+    bindChatPanel();
     if (onCustomerSelected) {
       onCustomerSelected((customerId) => {
         store.patch({ selectedCustomerId: customerId });

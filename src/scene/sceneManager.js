@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   MODEL_QUALITY,
+  NAV_GRID,
   RAYCAST_THROTTLE_MS,
   SCENE_POINTS,
   WAITER_TURN_SPEED
@@ -19,6 +20,8 @@ export function createSceneManager({ logger }) {
   let lastPointerCheckAt = 0;
   let onTableClick = null;
   let onCustomerClick = null;
+  let onObstacleChanged = null;
+  let obstacleEditMode = false;
   let activePathLine = null;
   let startedAt = performance.now();
 
@@ -43,9 +46,25 @@ export function createSceneManager({ logger }) {
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.enablePan = true;
+  controls.panSpeed = 1.25;
+  controls.screenSpacePanning = true;
+  controls.enableZoom = true;
+  controls.zoomSpeed = 1.35;
+  controls.rotateSpeed = 1.25;
+  controls.minDistance = 2.5;
+  controls.maxDistance = 80;
+  controls.minPolarAngle = 0.03;
+  controls.maxPolarAngle = Math.PI - 0.03;
+  controls.keyPanSpeed = 35;
   controls.target.set(0, 0, 0);
 
-  const gridHelper = new THREE.GridHelper(24, 48, 0x2dff8f, 0x2f7f95);
+  const visualGridSize = Math.max(NAV_GRID.width, NAV_GRID.depth);
+  const visualGridDivisions = Math.max(24, Math.round(visualGridSize / Math.max(0.4, NAV_GRID.cellSize)));
+  const gridHelper = new THREE.GridHelper(visualGridSize, visualGridDivisions, 0x2dff8f, 0x2f7f95);
+  gridHelper.position.x = NAV_GRID.origin.x;
+  gridHelper.position.z = NAV_GRID.origin.z;
   const gridMaterials = Array.isArray(gridHelper.material) ? gridHelper.material : [gridHelper.material];
   gridMaterials.forEach((material) => {
     material.transparent = true;
@@ -62,6 +81,8 @@ export function createSceneManager({ logger }) {
   floor.position.y = 0;
   floor.receiveShadow = true;
   scene.add(floor);
+  const obstacleMarkerGroup = new THREE.Group();
+  scene.add(obstacleMarkerGroup);
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.6));
   const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -88,6 +109,7 @@ export function createSceneManager({ logger }) {
   const animationMixers = [];
   const customerMoodVisuals = new Map();
   const customerBehaviors = new Map();
+  const obstacleMarkers = new Map();
 
   const quality = resolveQuality();
   dirLight.castShadow = true;
@@ -373,6 +395,122 @@ export function createSceneManager({ logger }) {
     onCustomerClick = cb;
   }
 
+  function setOnObstacleChanged(cb) {
+    onObstacleChanged = cb;
+  }
+
+  function navCellKey(cell) {
+    return `${cell.x},${cell.z}`;
+  }
+
+  function worldToNavCell(world) {
+    const halfWidth = NAV_GRID.width * 0.5;
+    const halfDepth = NAV_GRID.depth * 0.5;
+    const localX = (world.x - NAV_GRID.origin.x + halfWidth) / NAV_GRID.cellSize;
+    const localZ = (world.z - NAV_GRID.origin.z + halfDepth) / NAV_GRID.cellSize;
+    return {
+      x: THREE.MathUtils.clamp(Math.floor(localX), 0, Math.max(0, Math.floor(NAV_GRID.width - 1))),
+      z: THREE.MathUtils.clamp(Math.floor(localZ), 0, Math.max(0, Math.floor(NAV_GRID.depth - 1)))
+    };
+  }
+
+  function navCellToWorld(cell) {
+    const halfWidth = NAV_GRID.width * 0.5;
+    const halfDepth = NAV_GRID.depth * 0.5;
+    return new THREE.Vector3(
+      (cell.x + 0.5) * NAV_GRID.cellSize - halfWidth + NAV_GRID.origin.x,
+      0,
+      (cell.z + 0.5) * NAV_GRID.cellSize - halfDepth + NAV_GRID.origin.z
+    );
+  }
+
+  function getObstacleCells() {
+    return Array.from(obstacleMarkers.keys()).map((key) => {
+      const [x, z] = key.split(",").map((value) => Number(value));
+      return { x, z };
+    });
+  }
+
+  function emitObstacleChanged() {
+    if (onObstacleChanged) onObstacleChanged(getObstacleCells());
+  }
+
+  function getGroundHitPoint(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouseNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouseNDC, camera);
+    const hits = raycaster.intersectObject(floor, false);
+    return hits.length > 0 ? hits[0].point : null;
+  }
+
+  function setObstacleCell(cell, blocked, fromPointer = true) {
+    const key = navCellKey(cell);
+    const marker = obstacleMarkers.get(key);
+    if (blocked) {
+      if (marker) {
+        if (fromPointer) logger.log(`[障碍编辑] 障碍格(${cell.x},${cell.z})已存在`);
+        return false;
+      }
+      const center = navCellToWorld(cell);
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(NAV_GRID.cellSize * 0.88, 0.72, NAV_GRID.cellSize * 0.88),
+        new THREE.MeshStandardMaterial({
+          color: 0xff8b3d,
+          emissive: 0x6d2f05,
+          emissiveIntensity: 0.7,
+          transparent: true,
+          opacity: 0.88
+        })
+      );
+      mesh.position.set(center.x, 0.36, center.z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      obstacleMarkerGroup.add(mesh);
+      obstacleMarkers.set(key, mesh);
+      if (fromPointer) logger.log(`[障碍编辑] 左键添加障碍格(${cell.x},${cell.z})`);
+      emitObstacleChanged();
+      return true;
+    }
+
+    if (!marker) {
+      if (fromPointer) logger.log(`[障碍编辑] 障碍格(${cell.x},${cell.z})不存在`);
+      return false;
+    }
+    obstacleMarkerGroup.remove(marker);
+    marker.geometry.dispose();
+    marker.material.dispose();
+    obstacleMarkers.delete(key);
+    if (fromPointer) logger.log(`[障碍编辑] 右键删除障碍格(${cell.x},${cell.z})`);
+    emitObstacleChanged();
+    return true;
+  }
+
+  function editObstacleByPointer(event) {
+    const point = getGroundHitPoint(event);
+    if (!point) return false;
+    const cell = worldToNavCell(point);
+    if (event.button === 0) {
+      return setObstacleCell(cell, true, true);
+    }
+    if (event.button === 2) {
+      return setObstacleCell(cell, false, true);
+    }
+    return false;
+  }
+
+  function resetObstacles() {
+    obstacleMarkers.forEach((marker) => {
+      obstacleMarkerGroup.remove(marker);
+      marker.geometry.dispose();
+      marker.material.dispose();
+    });
+    const count = obstacleMarkers.size;
+    obstacleMarkers.clear();
+    logger.log(`[障碍编辑] 已重置障碍，共清空 ${count} 个障碍格`);
+    emitObstacleChanged();
+  }
+
   function getHoveredTableFromPointer(event) {
     const now = performance.now();
     if (event.type === "mousemove" && now - lastPointerCheckAt < RAYCAST_THROTTLE_MS) {
@@ -436,7 +574,17 @@ export function createSceneManager({ logger }) {
       hoveredTableAnchor = null;
     });
 
-    renderer.domElement.addEventListener("click", (event) => {
+    renderer.domElement.addEventListener("contextmenu", (event) => {
+      if (!obstacleEditMode) return;
+      event.preventDefault();
+    });
+
+    renderer.domElement.addEventListener("pointerdown", (event) => {
+      if (obstacleEditMode && editObstacleByPointer(event)) {
+        event.preventDefault();
+        return;
+      }
+      if (event.button !== 0) return;
       const rect = renderer.domElement.getBoundingClientRect();
       mouseNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouseNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -641,6 +789,15 @@ export function createSceneManager({ logger }) {
     loadModelsInStages,
     animate,
     moveAnchor,
-    clearPathLine
+    clearPathLine,
+    setGridVisible(visible) {
+      gridHelper.visible = Boolean(visible);
+    },
+    setObstacleEditMode(enabled) {
+      obstacleEditMode = Boolean(enabled);
+      renderer.domElement.style.cursor = obstacleEditMode ? "crosshair" : "default";
+    },
+    setOnObstacleChanged,
+    resetObstacles
   };
 }

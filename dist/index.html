@@ -4,81 +4,91 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>智慧餐厅多机器人协同调度控制台</title>
-    <script type="module" crossorigin src="/assets/index-D4wvYsrE.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CnITEzoA.css">
+    <script type="module" crossorigin src="/assets/index-ZxOZKbhP.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CU3oOS8R.css">
   </head>
   <body>
-    <div id="app">
-      <header class="top-bar">
-        <h1>智慧餐厅多机器人协同调度控制台</h1>
-      </header>
+  <div id="app">
+    <header class="top-bar">
+      <h1>智慧餐厅多机器人协同调度控制台</h1>
+      <p class="top-subtitle">多机器人协作 · 情绪感知 · 动态避障</p>
+    </header>
 
-      <main class="layout-main">
-        <!-- 左侧：顾客模拟终端 -->
-        <aside class="panel side-panel left-panel">
-          <h2 class="panel-title">顾客模拟终端</h2>
+    <main class="layout-main">
+      <aside class="panel side-panel left-panel">
+        <h2 class="panel-title">顾客操作台</h2>
 
-          <section class="card table-card">
-            <h3>桌台1</h3>
-            <p class="table-state-row">
-              当前状态：<span id="table-state-1" class="table-state">空闲</span>
-            </p>
-            <div class="btn-group">
-              <button class="task-btn" data-action="order" data-table="1">
-                普通点餐
-              </button>
-              <button class="task-btn emergency" data-action="water" data-table="1">
-                紧急送水
-              </button>
-              <button class="task-btn checkout" data-action="checkout" data-table="1">
-                点结账
-              </button>
-              <button class="task-btn cleanup" data-action="cleanup" data-table="1">
-                收餐清理
-              </button>
+        <section class="card card-group table-group">
+          <div class="group-head">
+            <h3>桌台操作</h3>
+            <span class="group-tag">高频</span>
+          </div>
+
+          <article class="table-card">
+            <div class="table-head">
+              <h4>桌台1</h4>
+              <p class="table-state-row">当前状态：<span id="table-state-1" class="table-state">空闲</span></p>
             </div>
-          </section>
-
-          <section class="card table-card">
-            <h3>桌台2</h3>
-            <p class="table-state-row">
-              当前状态：<span id="table-state-2" class="table-state">空闲</span>
-            </p>
-            <div class="btn-group">
-              <button class="task-btn" data-action="order" data-table="2">
-                普通点餐
-              </button>
-              <button class="task-btn emergency" data-action="water" data-table="2">
-                紧急送水
-              </button>
-              <button class="task-btn checkout" data-action="checkout" data-table="2">
-                点结账
-              </button>
-              <button class="task-btn cleanup" data-action="cleanup" data-table="2">
-                收餐清理
-              </button>
+            <div class="action-grid">
+              <button class="task-btn" data-action="order" data-table="1">普通点餐</button>
+              <button class="task-btn emergency" data-action="water" data-table="1">紧急送水</button>
+              <button class="task-btn checkout" data-action="checkout" data-table="1">点结账</button>
+              <button class="task-btn cleanup" data-action="cleanup" data-table="1">收餐清理</button>
             </div>
-          </section>
+            <div class="action-grid smart-grid">
+              <button class="task-btn smart" data-smart-action="order" data-table="1">智能点单</button>
+              <button class="task-btn smart" data-smart-action="water" data-table="1">智能要水</button>
+              <button class="task-btn smart" data-smart-action="checkout" data-table="1">智能结账</button>
+            </div>
+          </article>
 
-          <section class="card ai-card">
+          <article class="table-card">
+            <div class="table-head">
+              <h4>桌台2</h4>
+              <p class="table-state-row">当前状态：<span id="table-state-2" class="table-state">空闲</span></p>
+            </div>
+            <div class="action-grid">
+              <button class="task-btn" data-action="order" data-table="2">普通点餐</button>
+              <button class="task-btn emergency" data-action="water" data-table="2">紧急送水</button>
+              <button class="task-btn checkout" data-action="checkout" data-table="2">点结账</button>
+              <button class="task-btn cleanup" data-action="cleanup" data-table="2">收餐清理</button>
+            </div>
+            <div class="action-grid smart-grid">
+              <button class="task-btn smart" data-smart-action="order" data-table="2">智能点单</button>
+              <button class="task-btn smart" data-smart-action="water" data-table="2">智能要水</button>
+              <button class="task-btn smart" data-smart-action="checkout" data-table="2">智能结账</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="card card-group ai-card">
+          <div class="group-head">
             <h3>AI 指令台</h3>
-            <p class="hint-text">示例：给2号桌先送水再结账</p>
-            <div class="cmd-row">
-              <input id="cmd-input" type="text" placeholder="输入自然语言指令..." />
-              <button id="cmd-send" class="task-btn">解析执行</button>
-            </div>
-            <div class="cmd-row">
-              <button id="voice-btn" class="task-btn">语音输入</button>
-            </div>
-          </section>
-        </aside>
+            <span class="group-tag">自然语言</span>
+          </div>
+          <p class="hint-text">示例：给2号桌先送水再结账</p>
+          <div class="cmd-row">
+            <input id="cmd-input" type="text" placeholder="输入自然语言指令..." />
+            <button id="cmd-send" class="task-btn">解析执行</button>
+          </div>
+          <div class="cmd-row">
+            <button id="voice-btn" class="task-btn">语音输入</button>
+            <button id="global-chat-btn" class="task-btn smart">全局客服对话</button>
+          </div>
+        </section>
+      </aside>
 
-        <!-- 中间：Three.js 场景挂载区 -->
-        <section class="center-stage panel">
+      <section class="center-stage panel">
+        <div class="stage-head">
           <h2 class="overlay-title">3D 场景监控区</h2>
           <div id="loading-indicator">模型加载中 0%</div>
-          <div id="customer-panel" class="customer-panel hidden">
+        </div>
+
+        <div id="customer-panel" class="customer-panel hidden">
+          <div class="float-head">
             <h3 id="customer-panel-title">顾客服务面板</h3>
+          </div>
+          <div class="float-body">
             <p>桌台：<span id="customer-panel-table">-</span></p>
             <p>情绪：<span id="customer-panel-mood">-</span></p>
             <p>耐心：<span id="customer-panel-patience">-</span></p>
@@ -93,60 +103,95 @@
               <button id="customer-checkout-btn" class="task-btn checkout">结账</button>
               <button id="customer-soothe-btn" class="task-btn emergency">安抚请求</button>
             </div>
+          </div>
+          <div class="float-foot">
             <button id="customer-panel-close" class="task-btn cleanup">关闭</button>
           </div>
-          <div id="three-container"></div>
+        </div>
+
+        <div id="chat-panel" class="chat-panel hidden">
+          <div class="float-head chat-head">
+            <h3>智能对话</h3>
+            <select id="chat-mode-select">
+              <option value="table">桌台会话</option>
+              <option value="global">全局客服</option>
+            </select>
+          </div>
+          <div class="float-body">
+            <div id="chat-messages" class="chat-messages"></div>
+          </div>
+          <div class="float-foot">
+            <div class="chat-row">
+              <input id="chat-input" type="text" placeholder="输入消息，例如：你推荐我吃什么？" />
+              <button id="chat-send-btn" class="task-btn smart">发送</button>
+            </div>
+            <div class="chat-row">
+              <button id="chat-end-btn" class="task-btn emergency">聊天结束</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="three-container"></div>
+      </section>
+
+      <aside class="panel side-panel right-panel">
+        <h2 class="panel-title">调度中心</h2>
+
+        <section class="card card-group status-card">
+          <div class="group-head">
+            <h3>机器人状态</h3>
+          </div>
+          <p>厨师状态：<span id="chef-status" class="status idle">空闲</span></p>
+          <p>服务员状态：<span id="waiter-status" class="status idle">空闲</span></p>
         </section>
 
-        <!-- 右侧：调度中心 -->
-        <aside class="panel side-panel right-panel">
-          <h2 class="panel-title">调度中心</h2>
-
-          <section class="card status-card">
-            <p>厨师状态：<span id="chef-status" class="status idle">空闲</span></p>
-            <p>服务员状态：<span id="waiter-status" class="status idle">空闲</span></p>
-          </section>
-
-          <section class="card queue-card">
+        <section class="card card-group queue-card">
+          <div class="group-head">
             <h3>任务队列</h3>
-            <ul id="task-list"></ul>
-          </section>
+          </div>
+          <ul id="task-list"></ul>
+        </section>
 
-          <section class="card control-card">
-            <h3>演示模式</h3>
-            <div class="cmd-row">
-              <select id="scenario-select">
-                <option value="normal">平峰模式</option>
-                <option value="lunchRush">午高峰</option>
-                <option value="emergency">突发事件</option>
-              </select>
-              <button id="replay-btn" class="task-btn">回放事件流</button>
-            </div>
-            <div class="cmd-row">
-              <button id="demo-script-btn" class="task-btn">一键演示脚本</button>
-            </div>
-          </section>
+        <section class="card card-group control-card">
+          <div class="group-head">
+            <h3>演示控制</h3>
+          </div>
+          <div class="cmd-row">
+            <select id="scenario-select">
+              <option value="normal">平峰模式</option>
+              <option value="lunchRush">午高峰</option>
+              <option value="emergency">突发事件</option>
+            </select>
+            <button id="replay-btn" class="task-btn">回放事件流</button>
+          </div>
+          <div class="cmd-row">
+            <button id="demo-script-btn" class="task-btn">一键演示脚本</button>
+          </div>
+        </section>
 
-          <section class="card metrics-card">
+        <section class="card card-group metrics-card">
+          <div class="group-head">
             <h3>仿真指标</h3>
-            <ul id="metrics-list">
-              <li>平均响应时延：<span id="metric-avg-response">0.0s</span></li>
-              <li>任务完成率：<span id="metric-completion-rate">0%</span></li>
-              <li>峰值队列长度：<span id="metric-peak-queue">0</span></li>
-              <li>平均等待时长：<span id="metric-avg-wait">0.0s</span></li>
-            </ul>
-          </section>
-        </aside>
-      </main>
+          </div>
+          <ul id="metrics-list">
+            <li>平均响应时延：<span id="metric-avg-response">0.0s</span></li>
+            <li>任务完成率：<span id="metric-completion-rate">0%</span></li>
+            <li>峰值队列长度：<span id="metric-peak-queue">0</span></li>
+            <li>平均等待时长：<span id="metric-avg-wait">0.0s</span></li>
+          </ul>
+        </section>
+      </aside>
+    </main>
 
-      <!-- 底部：系统日志 -->
-      <footer class="panel log-panel">
+    <footer class="panel log-panel">
+      <div class="group-head">
         <h2 class="panel-title">系统日志</h2>
-        <div class="log-box">
-          <ul id="log-list"></ul>
-        </div>
-      </footer>
-    </div>
+      </div>
+      <div class="log-box">
+        <ul id="log-list"></ul>
+      </div>
+    </footer>
+  </div>
 
-  </body>
+</body>
 </html>

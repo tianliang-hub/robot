@@ -32,6 +32,11 @@ const uiController = createUIController({
 function initDebugPanel() {
   const params = {
     mode: "showcase",
+    显示导航网格: true,
+    障碍编辑模式: false,
+    重置障碍: () => {
+      sceneManager.resetObstacles?.();
+    },
     导出TransformJSON: async () => {
       const payload = {};
       sceneManager.editableTargets.forEach((item) => {
@@ -60,6 +65,14 @@ function initDebugPanel() {
   };
   const gui = new GUI({ title: "系统调试台" });
   gui.add(params, "mode", ["showcase", "debug"]).name("模式");
+  gui.add(params, "显示导航网格").onChange((value) => {
+    sceneManager.setGridVisible?.(value);
+  });
+  gui.add(params, "障碍编辑模式").onChange((value) => {
+    sceneManager.setObstacleEditMode?.(value);
+    logger.log(value ? "[障碍编辑] 已开启地面点击障碍编辑模式" : "[障碍编辑] 已关闭障碍编辑模式");
+  });
+  gui.add(params, "重置障碍");
   gui.add(params, "导出TransformJSON");
   return gui;
 }
@@ -77,6 +90,9 @@ async function bootstrap() {
   sceneManager.setOnCustomerClick((customerId) => {
     store.patch({ selectedCustomerId: customerId });
     logger.log(`[空间交互] 已锁定顾客${customerId}，顾客服务面板已展开。`);
+  });
+  sceneManager.setOnObstacleChanged((cells) => {
+    scheduler.updateDynamicObstacles?.(cells);
   });
 
   await sceneManager.loadModelsInStages(ACTOR_MODEL_PLAN, STATIC_MODEL_PLAN);
