@@ -128,6 +128,16 @@ export function createPathPlanner(options = {}) {
     return targetWorld;
   }
 
+  function resolveReachableStart(worldStart) {
+    const startCellRaw = worldToCell(worldStart);
+    const resolvedCell = pickNearestOpenCell(startCellRaw);
+    if (!resolvedCell) return null;
+    return cellToWorld(
+      resolvedCell,
+      (worldStart && typeof worldStart.y === "number" ? worldStart.y : 0)
+    );
+  }
+
   function reconstructPath(cameFrom, currentKey) {
     const cellList = [parseCellKey(currentKey)];
     let cursor = currentKey;
@@ -149,7 +159,7 @@ export function createPathPlanner(options = {}) {
     const startKey = cellKey(start.x, start.z);
     const endKey = cellKey(end.x, end.z);
     if (startKey === endKey) {
-      return [endWorld.clone()];
+      return [cellToWorld(end, startWorld.y || 0)];
     }
 
     const openSet = new Set([startKey]);
@@ -191,7 +201,7 @@ export function createPathPlanner(options = {}) {
         const path = pathCells.map((cell) => cellToWorld(cell, startWorld.y || 0));
         if (path.length > 0) {
           path[0] = startWorld.clone();
-          path[path.length - 1] = endWorld.clone();
+          path[path.length - 1] = cellToWorld(end, startWorld.y || 0);
         }
         return path;
       }
@@ -200,6 +210,11 @@ export function createPathPlanner(options = {}) {
       for (const dir of directions) {
         const next = { x: currentCell.x + dir.x, z: currentCell.z + dir.z };
         if (!isInsideCell(next.x, next.z)) continue;
+        if (dir.x !== 0 && dir.z !== 0) {
+          const sideA = { x: currentCell.x + dir.x, z: currentCell.z };
+          const sideB = { x: currentCell.x, z: currentCell.z + dir.z };
+          if (isBlocked(sideA) || isBlocked(sideB)) continue;
+        }
         const nextKey = cellKey(next.x, next.z);
         if (nextKey !== endKey && isBlocked(next)) continue;
         const tentative = (gScore.get(currentKey) ?? Number.POSITIVE_INFINITY) + dir.c;
@@ -228,6 +243,7 @@ export function createPathPlanner(options = {}) {
     replaceBlockedCells,
     getBlockedCells,
     findPath,
-    resolveReachableTarget
+    resolveReachableTarget,
+    resolveReachableStart
   };
 }

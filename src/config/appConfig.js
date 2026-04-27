@@ -110,6 +110,14 @@ export const NAV_STATIC_OBSTACLE_PREFIXES = [
   "扩展沙发"
 ];
 export const NAV_STATIC_OBSTACLE_PADDING = 0.38;
+export const TABLE_UNDER_OBSTACLE_OFFSETS = [
+  [-0.5, 0],
+  [0, 0],
+  [0.5, 0],
+  [0, -0.45],
+  [0, 0.45]
+];
+export const TABLE_UNDER_OBSTACLE_RADIUS = 0.36;
 
 export const FLOW_CONFIG = {
   confirmAtTableMs: 900,

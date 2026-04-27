@@ -201,7 +201,15 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     let routeLogged = false;
 
     while (true) {
-      const current = sceneManager.anchors.waiter.position.clone();
+      const currentRaw = sceneManager.anchors.waiter.position.clone();
+      const current = pathPlanner.resolveReachableStart(currentRaw) || currentRaw;
+      if (current.distanceTo(currentRaw) > 1e-3) {
+        await sceneManager.moveAnchor("waiter", current, 120, {
+          withPath: false,
+          faceToMove,
+          stopDistance: 0
+        });
+      }
       const resolvedTarget = pathPlanner.resolveReachableTarget(destination, current);
       if (!resolvedTarget) {
         if (!unreachableLogged) {

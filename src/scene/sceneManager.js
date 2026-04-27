@@ -8,6 +8,9 @@ import {
   NAV_STATIC_OBSTACLE_PREFIXES,
   RAYCAST_THROTTLE_MS,
   SCENE_POINTS,
+  SERVICE_POINTS,
+  TABLE_UNDER_OBSTACLE_OFFSETS,
+  TABLE_UNDER_OBSTACLE_RADIUS,
   WAITER_TURN_SPEED
 } from "../config/appConfig.js";
 
@@ -115,6 +118,7 @@ export function createSceneManager({ logger }) {
   const customerBehaviors = new Map();
   const obstacleMarkers = new Map();
   const staticObstacleCells = new Set();
+  const tableUnderObstacleCells = new Set();
 
   const quality = resolveQuality();
   dirLight.castShadow = true;
@@ -453,6 +457,7 @@ export function createSceneManager({ logger }) {
 
   function getAllObstacleCells() {
     const merged = new Set(staticObstacleCells);
+    tableUnderObstacleCells.forEach((key) => merged.add(key));
     obstacleMarkers.forEach((_marker, key) => merged.add(key));
     return Array.from(merged).map((key) => parseCellKey(key));
   }
@@ -492,7 +497,44 @@ export function createSceneManager({ logger }) {
       }
     });
     logger.log(`[导航投影] 已投影静态障碍单元 ${staticObstacleCells.size}`);
+    projectTableUnderObstacles();
     emitObstacleChanged();
+  }
+
+  function projectTableUnderObstacles() {
+    tableUnderObstacleCells.clear();
+    const protectedCells = new Set();
+    Object.values(SERVICE_POINTS.tableService || {}).forEach((point) => {
+      const center = worldToNavCell(point);
+      for (let dz = -1; dz <= 1; dz += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const cell = { x: center.x + dx, z: center.z + dz };
+          if (cell.x < 0 || cell.z < 0 || cell.x >= NAV_GRID.width || cell.z >= NAV_GRID.depth) continue;
+          protectedCells.add(navCellKey(cell));
+        }
+      }
+    });
+
+    const radiusInCell = Math.max(0, Math.ceil(TABLE_UNDER_OBSTACLE_RADIUS / NAV_GRID.cellSize));
+    Object.keys(SCENE_POINTS.tables || {}).forEach((tableId) => {
+      const anchor = anchors[`table${tableId}`];
+      if (!anchor) return;
+      TABLE_UNDER_OBSTACLE_OFFSETS.forEach((offset) => {
+        const [dx = 0, dz = 0] = offset;
+        const center = worldToNavCell(
+          new THREE.Vector3(anchor.position.x + dx, 0, anchor.position.z + dz)
+        );
+        for (let z = center.z - radiusInCell; z <= center.z + radiusInCell; z += 1) {
+          for (let x = center.x - radiusInCell; x <= center.x + radiusInCell; x += 1) {
+            if (x < 0 || z < 0 || x >= NAV_GRID.width || z >= NAV_GRID.depth) continue;
+            const key = navCellKey({ x, z });
+            if (protectedCells.has(key)) continue;
+            tableUnderObstacleCells.add(key);
+          }
+        }
+      });
+    });
+    logger.log(`[导航投影] 已投影桌底隐藏障碍单元 ${tableUnderObstacleCells.size}`);
   }
 
   function getGroundHitPoint(event) {
