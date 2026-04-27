@@ -32,6 +32,12 @@ export function createStateStore() {
     waiterConversationState: "idle",
     chefState: "idle",
     waiterState: "idle",
+    waiter2State: "idle",
+    waiters: {
+      waiter: { state: "idle", currentTask: null, conversationState: "idle" },
+      waiter2: { state: "idle", currentTask: null, conversationState: "idle" }
+    },
+    currentTasks: { waiter: null, waiter2: null },
     isDispatching: false,
     currentTask: null,
     scenario: "normal",

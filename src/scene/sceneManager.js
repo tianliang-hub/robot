@@ -4,8 +4,9 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   MODEL_QUALITY,
   NAV_GRID,
+  NAV_STATIC_OBSTACLE_EXCLUDE_NAMES,
+  NAV_STATIC_OBSTACLE_INCLUDE_NAMES,
   NAV_STATIC_OBSTACLE_PADDING,
-  NAV_STATIC_OBSTACLE_PREFIXES,
   RAYCAST_THROTTLE_MS,
   SCENE_POINTS,
   SERVICE_POINTS,
@@ -97,6 +98,7 @@ export function createSceneManager({ logger }) {
   const anchors = {
     chef: createAnchor(0xff3b3b, SCENE_POINTS.chef),
     waiter: createAnchor(0x3a7bff, SCENE_POINTS.standby),
+    waiter2: createAnchor(0x4f9bff, SCENE_POINTS.standby2 || SCENE_POINTS.standby),
     transfer: createAnchor(0xffd24a, SCENE_POINTS.transferZone),
     recycle: createAnchor(0x555555, SCENE_POINTS.recycleZone),
     water: createCylinderAnchor(0xffffff, SCENE_POINTS.waterPoint)
@@ -466,23 +468,35 @@ export function createSceneManager({ logger }) {
     if (onObstacleChanged) onObstacleChanged(getAllObstacleCells());
   }
 
-  function shouldProjectStaticObstacle(name) {
-    const normalized = String(name || "").toLowerCase();
-    if (normalized.startsWith("锚点-桌台")) return true;
-    return NAV_STATIC_OBSTACLE_PREFIXES.some((prefix) =>
-      normalized.startsWith(String(prefix).toLowerCase())
-    );
+  function shouldProjectStaticObstacle(plan) {
+    const name = String(plan?.name || "");
+    if (!name) return false;
+    if (name.startsWith("锚点-桌台")) return true;
+    if (NAV_STATIC_OBSTACLE_INCLUDE_NAMES.includes(name)) return true;
+    if (!Array.isArray(plan?.pos)) return false;
+    return !NAV_STATIC_OBSTACLE_EXCLUDE_NAMES.includes(name);
   }
 
   function projectStaticObstacles(staticPlans = []) {
     staticObstacleCells.clear();
+    let projectedModels = 0;
+    const skippedNames = [];
+    const missingModels = [];
     staticPlans.forEach((plan) => {
-      if (!shouldProjectStaticObstacle(plan.name)) return;
-      const model = modelRefs.get(plan.name);
-      if (!model) return;
+      const name = String(plan?.name || "");
+      if (!shouldProjectStaticObstacle(plan)) {
+        if (name) skippedNames.push(name);
+        return;
+      }
+      const model = modelRefs.get(name) || (plan.anchorKey ? anchors[plan.anchorKey] : null);
+      if (!model) {
+        if (name) missingModels.push(name);
+        return;
+      }
       model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
       if (box.isEmpty()) return;
+      projectedModels += 1;
 
       const minX = box.min.x - NAV_STATIC_OBSTACLE_PADDING;
       const maxX = box.max.x + NAV_STATIC_OBSTACLE_PADDING;
@@ -496,7 +510,15 @@ export function createSceneManager({ logger }) {
         }
       }
     });
-    logger.log(`[导航投影] 已投影静态障碍单元 ${staticObstacleCells.size}`);
+    logger.log(
+      `[导航投影] 静态障碍覆盖：模型${projectedModels}个，障碍单元${staticObstacleCells.size}个，跳过${skippedNames.length}个，缺失${missingModels.length}个`
+    );
+    if (skippedNames.length > 0) {
+      logger.log(`[导航投影] 跳过模型：${skippedNames.join("、")}`);
+    }
+    if (missingModels.length > 0) {
+      logger.log(`[导航投影] 未找到模型引用：${missingModels.join("、")}`);
+    }
     projectTableUnderObstacles();
     emitObstacleChanged();
   }

@@ -56,6 +56,7 @@ export const CUSTOMER_DEMAND_TEMPLATES = {
 export const SCENE_POINTS = {
   chef: new THREE.Vector3(0, 0, -9.7),
   standby: new THREE.Vector3(0, 0, -2),
+  standby2: new THREE.Vector3(2.2, 0, -2),
   transferZone: new THREE.Vector3(0, 1.7, -6.1),
   recycleZone: new THREE.Vector3(-7, 0, -4.5),
   waterPoint: new THREE.Vector3(-5, 0, 0),
@@ -81,6 +82,24 @@ export const SERVICE_POINTS = {
     "2": [new THREE.Vector3(6.8, 0, 1.2)],
     "3": [new THREE.Vector3(-6.6, 0, 7.9)],
     "4": [new THREE.Vector3(3.8, 0, 7.9)]
+  },
+  tableServicePrimary: {
+    "1": new THREE.Vector3(-5.2, 0, 2.1),
+    "2": new THREE.Vector3(5.2, 0, 2.1),
+    "3": new THREE.Vector3(-5.2, 0, 8.4),
+    "4": new THREE.Vector3(5.3, 0, 8.4)
+  },
+  tableServiceAlt: {
+    "1": new THREE.Vector3(-5.2, 0, 4.35),
+    "2": new THREE.Vector3(5.2, 0, 4.35),
+    "3": new THREE.Vector3(-5.2, 0, 10.65),
+    "4": new THREE.Vector3(5.3, 0, 10.65)
+  },
+  tableServiceFallback: {
+    "1": new THREE.Vector3(-3.9, 0, 3.2),
+    "2": new THREE.Vector3(3.9, 0, 3.2),
+    "3": new THREE.Vector3(-3.9, 0, 9.5),
+    "4": new THREE.Vector3(4.0, 0, 9.5)
   },
   tableService: {
     "1": new THREE.Vector3(-5.2, 0, 2.1),
@@ -109,6 +128,8 @@ export const NAV_STATIC_OBSTACLE_PREFIXES = [
   "oven",
   "扩展沙发"
 ];
+export const NAV_STATIC_OBSTACLE_EXCLUDE_NAMES = ["顾客A", "顾客B", "顾客C"];
+export const NAV_STATIC_OBSTACLE_INCLUDE_NAMES = ["锚点-回收站"];
 export const NAV_STATIC_OBSTACLE_PADDING = 0.38;
 export const TABLE_UNDER_OBSTACLE_OFFSETS = [
   [-0.5, 0],
@@ -169,6 +190,15 @@ export const ACTOR_MODEL_PLAN = [
     name: "锚点-兔子服务员",
     url: "/models/waiter/waiter.glb",
     anchorKey: "waiter",
+    scale: 0.82,
+    rotationY: 0,
+    stage: 1,
+    importance: "high"
+  },
+  {
+    name: "锚点-兔子服务员2",
+    url: "/models/waiter/waiter.glb",
+    anchorKey: "waiter2",
     scale: 0.82,
     rotationY: 0,
     stage: 1,
@@ -241,7 +271,7 @@ export const STATIC_MODEL_PLAN = [
   { name: "wall_redwood_left", url: "/models/environment/wall_redwood.glb", pos: [-2.2, 2.3, -11.5], scale: 0.14, stage: 2, importance: "low" },
   { name: "wall_redwood_right", url: "/models/environment/wall_redwood.glb", pos: [2.8, 2.3, -11.5], scale: 0.14, stage: 2, importance: "low" },
   { name: "oven", url: "/models/environment/oven.glb", pos: [-6.9, 0, -9.5], scale: 1.26, rotationY: Math.PI / 2, stage: 1, importance: "high" },
-  { name: "fridge", url: "/models/environment/fridge.glb", pos: [-8.9, 0, -4.5], scale: 0.9, rotationY: THREE.MathUtils.degToRad(88), stage: 1, importance: "high" },
+  { name: "fridge", url: "/models/environment/fridge.glb", pos: [-7, 0, -1.5], scale: 0.9, rotationY: THREE.MathUtils.degToRad(88), stage: 1, importance: "high" },
   {
     name: "充电桩",
     url: "/models/props/charging_pile.glb",

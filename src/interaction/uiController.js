@@ -6,6 +6,7 @@ import { parseNaturalCommand } from "../ai/nlParser.js";
 export function createUIController({ store, scheduler, logger, replayRecorder }) {
   const chefStatusEl = document.getElementById("chef-status");
   const waiterStatusEl = document.getElementById("waiter-status");
+  const waiter2StatusEl = document.getElementById("waiter2-status");
   const tableStateEls = Object.fromEntries(
     Array.from(document.querySelectorAll("[id^='table-state-']")).map((el) => {
       const tableId = String(el.id).replace("table-state-", "");
@@ -55,6 +56,9 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
     };
     chefStatusEl.textContent = robotStateMap[state.chefState] || state.chefState;
     waiterStatusEl.textContent = robotStateMap[state.waiterState] || state.waiterState;
+    if (waiter2StatusEl) {
+      waiter2StatusEl.textContent = robotStateMap[state.waiter2State] || state.waiter2State || "空闲";
+    }
 
     Object.keys(tableStateEls).forEach((tableId) => {
       if (!tableStateEls[tableId]) return;
@@ -75,7 +79,9 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
     } else {
       state.taskQueue.forEach((task, index) => {
         const li = document.createElement("li");
-        li.textContent = `#${index + 1} [P${task.priority}] [${task.source}] 桌台${task.tableId} - ${task.type}`;
+        const assignee =
+          task.assignee === "waiter2" ? "服务员B" : task.assignee === "waiter" ? "服务员A" : "待分配";
+        li.textContent = `#${index + 1} [P${task.priority}] [${task.source}] [${assignee}] 桌台${task.tableId} - ${task.type}`;
         taskListEl.appendChild(li);
       });
     }
