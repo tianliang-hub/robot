@@ -585,11 +585,12 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
   function enqueueFollowupByIntent(tableId, intent) {
     const key = String(tableId);
     if (intent === "order") {
-      if (state.tableStatus[key] === "idle") {
-        setTableStatus(key, "waiting", `桌台${key}状态切换：空闲 -> 等餐中`);
+      if (state.tableStatus[key] !== "waiting") {
+        const from = state.tableStatus[key];
+        const fromLabel = TABLE_STATE_LABEL[from] || from;
+        setTableStatus(key, "waiting", `桌台${key}状态切换：${fromLabel} -> 等餐中`);
       }
       enqueueDemandForTable(key, "点餐", "smart");
-      if (hasSameTask("点餐", key)) return true;
       const task = addTask("点餐", key, TASK_PRIORITY["点餐"], "smart", true);
       if (!task) {
         logger.log(`[智能对话] 桌台${key}点餐任务注入失败（队列保护或条件限制），本轮先回待命位。`);
@@ -925,8 +926,8 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
   }
 
   function isActionAllowed(tableStatus, action) {
-    if (action === "order") return tableStatus === "idle";
-    if (action === "water") return tableStatus === "waiting" || tableStatus === "eating";
+    if (action === "order") return tableStatus !== "cleaning";
+    if (action === "water") return tableStatus !== "cleaning";
     if (action === "checkout") return tableStatus === "checkout";
     if (action === "cleanup") return tableStatus === "cleaning";
     return false;
@@ -944,11 +945,12 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       return false;
     }
     if (action === "order") {
-      if (!hasSameTask("点餐", key)) {
-        setTableStatus(key, "waiting", `桌台${key}状态切换：空闲 -> 等餐中`);
-        enqueueDemandForTable(key, "点餐", "ui");
-        addTask("点餐", key);
+      if (status !== "waiting") {
+        const fromLabel = TABLE_STATE_LABEL[status] || status;
+        setTableStatus(key, "waiting", `桌台${key}状态切换：${fromLabel} -> 等餐中`);
       }
+      enqueueDemandForTable(key, "点餐", "ui");
+      addTask("点餐", key);
       return true;
     }
     if (action === "water") {
@@ -1012,13 +1014,13 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     const key = customer.tableId;
     logger.log(`[顾客] ${customer.name} 发起请求：${template.label}`);
     if (action === "order") {
-      if (state.tableStatus[key] === "idle") {
-        setTableStatus(key, "waiting", `桌台${key}状态切换：空闲 -> 等餐中`);
+      if (state.tableStatus[key] !== "waiting") {
+        const from = state.tableStatus[key];
+        const fromLabel = TABLE_STATE_LABEL[from] || from;
+        setTableStatus(key, "waiting", `桌台${key}状态切换：${fromLabel} -> 等餐中`);
       }
-      if (!hasSameTask("点餐", key)) {
-        enqueueDemandForTable(key, "点餐", "customer");
-        addTask("点餐", key);
-      }
+      enqueueDemandForTable(key, "点餐", "customer");
+      addTask("点餐", key);
       return true;
     }
     if (action === "pickup") {
