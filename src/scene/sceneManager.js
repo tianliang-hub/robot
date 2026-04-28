@@ -139,19 +139,24 @@ export function createSceneManager({ logger }) {
   const tableItemSlots = new Map();
   const tableItemInstances = new Map();
   const tableItemTemplateCache = new Map();
+  const BOTTLE_MODEL_URL = "/models/props/bottle.glb";
+  // 以桌面瓶子为准，手持与桌面统一这组参数
+  const BOTTLE_STYLE_SCALE = 0.6;
+  const BOTTLE_STYLE_POS_Y = 0.65;
+
   // 道具类型列表与模型定义
   const WAITER_PROP_DEFS = {
     food: [
       { url: "/models/props/plate.glb", scale: 0.21, posY: 0 },
-      { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.18, posY: 0.06 }
+      { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.18, posY: 0.01 }
     ],
     water: [
-      { url: "/models/props/bottle.glb", scale: 0.28, posY: 0 }
+      { url: BOTTLE_MODEL_URL, scale: BOTTLE_STYLE_SCALE*1.5, posY: BOTTLE_STYLE_POS_Y }
     ]
   };
   const TABLE_ITEM_DEFS = {
-    // 与手持道具保持同尺度，避免“落桌后大小变化”
-    waterBottle: [{ url: "/models/props/bottle.glb", scale: 0.5, posY: 0.65 }],
+    // 手持与桌面统一同一套瓶子样式参数
+    waterBottle: [{ url: BOTTLE_MODEL_URL, scale: BOTTLE_STYLE_SCALE, posY: BOTTLE_STYLE_POS_Y }],
     foodPlate: [
       { url: "/models/props/plate.glb", scale: 0.55, posY: 0.655 },
       { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.45, posY: 0.655 }
@@ -480,10 +485,11 @@ export function createSceneManager({ logger }) {
             mesh.scale.setScalar(part.scale);
             mesh.position.y = part.posY ?? 0;
 
-            // 解决模型在手臂内部不可见的问题：关闭深度测试，提升渲染层级
+            // 非水瓶道具使用增强渲染，水瓶保持与桌面一致的原始材质观感
+            const useEnhancedCarryRender = propType !== "water";
             mesh.traverse((child) => {
               if (!child.isMesh) return;
-              if (child.material) {
+              if (useEnhancedCarryRender && child.material) {
                 // 如果模型有多个材质，可能是数组
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach(mat => {
@@ -494,7 +500,7 @@ export function createSceneManager({ logger }) {
                   }
                 });
               }
-              child.renderOrder = 999;
+              child.renderOrder = useEnhancedCarryRender ? 999 : 0;
               child.castShadow = true;
               child.receiveShadow = true;
               child.visible = true;
@@ -505,8 +511,8 @@ export function createSceneManager({ logger }) {
             logger.log(`[道具] ${propType} 部件 ${part.url} 加载失败: ${_err}`);
           }
         }
-        // 放大 5 倍以抵消骨骼局部缩小
-        group.scale.setScalar(5);
+        // 水瓶按桌面样式保持原始比例，其它道具保留原补偿
+        group.scale.setScalar(propType === "water" ? 1 : 5);
         propCache.set(propType, group);
         logger.log(`[道具] ${propType} 预加载完成，共 ${loaded} 个真实模型部件`);
       })
@@ -1254,12 +1260,12 @@ export function createSceneManager({ logger }) {
 
         // 加上适当的偏移量，让盘子在手的正上方
         // 这里基于机器人的局部坐标系：Y 是上，Z 是前，X 是左右
-        boneWorldPos.y -= 0.7; // 托高一点
-        boneWorldPos.z -= 0.5; // 减少前探，水瓶更靠近手部
+        boneWorldPos.y -= 0.5; // 托高一点
+        boneWorldPos.z -= 0.2; // 减少前探，水瓶更靠近手部
         boneWorldPos.x -= 0.2; // 进一步向机器人的右手边靠多一点
 
         // 平滑插值，消除骨骼动画带来的高频抖动
-        entry.current.position.lerp(boneWorldPos, 0.15);
+        entry.current.position.lerp(boneWorldPos, 1);
         if (entry.currentType === "water") {
           // 水瓶跟随手臂姿态：把手骨世界旋转转换为 slot 局部旋转后再平滑插值
           const boneWorldQuat = new THREE.Quaternion();
