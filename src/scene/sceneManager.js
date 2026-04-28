@@ -136,6 +136,9 @@ export function createSceneManager({ logger }) {
   // waiterPropSlots: waiterId -> { slot: THREE.Group (挂载在锚点上), current: THREE.Group | null }
   const propCache = new Map();
   const waiterPropSlots = new Map();
+  const tableItemSlots = new Map();
+  const tableItemInstances = new Map();
+  const tableItemTemplateCache = new Map();
   // 道具类型列表与模型定义
   const WAITER_PROP_DEFS = {
     food: [
@@ -145,6 +148,20 @@ export function createSceneManager({ logger }) {
     water: [
       { url: "/models/props/bottle.glb", scale: 0.28, posY: 0 }
     ]
+  };
+  const TABLE_ITEM_DEFS = {
+    // 与手持道具保持同尺度，避免“落桌后大小变化”
+    waterBottle: [{ url: "/models/props/bottle.glb", scale: 0.5, posY: 0.65 }],
+    foodPlate: [
+      { url: "/models/props/plate.glb", scale: 0.55, posY: 0.655 },
+      { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.45, posY: 0.655 }
+    ],
+    emptyPlate: [{ url: "/models/props/plate.glb", scale: 0.55, posY: 0.65 }]
+  };
+  const TABLE_ITEM_LAYOUT = {
+    waterBottle: { x: 0.22, y: 0.78, z: -0.05, rotY: Math.PI * 0.12 },
+    foodPlate: { x: -0.12, y: 0.77, z: 0.08, rotY: Math.PI * 0.4 },
+    emptyPlate: { x: -0.12, y: 0.77, z: 0.08, rotY: Math.PI * 0.25 }
   };
 
   // 道具 slot 挂载在锚点上的局部偏移（相对锚点原点，Y≈手高）
@@ -563,6 +580,122 @@ export function createSceneManager({ logger }) {
     entry.propParent = null;
     entry.trackingBone = null;
     logger.log(`[道具] ${waiterId} 隐藏道具`);
+  }
+
+  function makeTableItemKey(tableId, itemType) {
+    return `${String(tableId)}:${String(itemType)}`;
+  }
+
+  function ensureTableSlot(tableId) {
+    const key = String(tableId);
+    const exists = tableItemSlots.get(key);
+    if (exists) return exists;
+    const anchor = anchors[`table${key}`];
+    const slot = new THREE.Group();
+    if (anchor) {
+      slot.position.set(anchor.position.x, 0, anchor.position.z);
+    } else {
+      const pos = SCENE_POINTS.tables?.[key];
+      if (pos) slot.position.set(pos.x, 0, pos.z);
+    }
+    scene.add(slot);
+    tableItemSlots.set(key, slot);
+    return slot;
+  }
+
+  function createFallbackTableItem(itemType) {
+    const group = new THREE.Group();
+    if (itemType === "waterBottle") {
+      const bottle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.028, 0.035, 0.16, 16),
+        new THREE.MeshStandardMaterial({ color: 0x8fd8ff, roughness: 0.3, metalness: 0.05 })
+      );
+      bottle.position.y = 0.08;
+      group.add(bottle);
+      return group;
+    }
+    const plate = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 0.02, 24),
+      new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.8, metalness: 0.02 })
+    );
+    plate.position.y = 0.01;
+    group.add(plate);
+    if (itemType === "foodPlate") {
+      const food = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.03, 0.06),
+        new THREE.MeshStandardMaterial({ color: 0xffb36b, roughness: 0.6, metalness: 0.05 })
+      );
+      food.position.set(0.02, 0.035, 0);
+      group.add(food);
+    }
+    return group;
+  }
+
+  async function loadTableItemTemplate(itemType) {
+    const defs = TABLE_ITEM_DEFS[itemType];
+    if (!defs || defs.length === 0) return createFallbackTableItem(itemType);
+    const group = new THREE.Group();
+    let loaded = 0;
+    for (const part of defs) {
+      try {
+        const gltf = await loadGLB(part.url);
+        const mesh = gltf.scene.clone(true);
+        mesh.position.y = part.posY || 0;
+        mesh.scale.setScalar(part.scale || 1);
+        mesh.traverse((node) => {
+          if (!node.isMesh) return;
+          node.castShadow = true;
+          node.receiveShadow = true;
+        });
+        group.add(mesh);
+        loaded += 1;
+      } catch (_e) {
+        logger.log(`[桌面摆件] ${itemType} 部件加载失败: ${part.url}`);
+      }
+    }
+    return loaded > 0 ? group : createFallbackTableItem(itemType);
+  }
+
+  async function ensureTableItemVisible(tableId, itemType) {
+    const tableKey = String(tableId);
+    const slot = ensureTableSlot(tableKey);
+    const key = makeTableItemKey(tableKey, itemType);
+    let item = tableItemInstances.get(key);
+    if (!item) {
+      let template = tableItemTemplateCache.get(itemType);
+      if (!template) {
+        template = await loadTableItemTemplate(itemType);
+        tableItemTemplateCache.set(itemType, template);
+      }
+      item = template.clone(true);
+      const layout = TABLE_ITEM_LAYOUT[itemType] || { x: 0, y: 0.78, z: 0, rotY: 0 };
+      item.position.set(layout.x, layout.y, layout.z);
+      item.rotation.set(0, layout.rotY || 0, 0);
+      slot.add(item);
+      tableItemInstances.set(key, item);
+    }
+    item.visible = true;
+  }
+
+  function setTableItem(tableId, itemType, visible) {
+    const tableKey = String(tableId);
+    const key = makeTableItemKey(tableKey, itemType);
+    if (!visible) {
+      const item = tableItemInstances.get(key);
+      if (item) item.visible = false;
+      return;
+    }
+    ensureTableItemVisible(tableKey, itemType).catch((err) => {
+      logger.log(`[桌面摆件] 设置失败 table=${tableKey} item=${itemType}: ${String(err)}`);
+    });
+  }
+
+  function clearTableItems(tableId) {
+    const prefix = `${String(tableId)}:`;
+    tableItemInstances.forEach((item, key) => {
+      if (!key.startsWith(prefix)) return;
+      item.visible = false;
+    });
   }
 
   function setFridgeDoorOpen(open, durationMs = 280) {
@@ -1209,6 +1342,8 @@ export function createSceneManager({ logger }) {
     },
     showWaiterProp,
     hideWaiterProp,
+    setTableItem,
+    clearTableItems,
     setFridgeDoorOpen,
     setGridVisible(visible) {
       gridHelper.visible = Boolean(visible);

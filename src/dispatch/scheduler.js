@@ -538,6 +538,15 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     store.notify();
   }
 
+  function ensureTableArtifacts(tableId) {
+    const key = String(tableId);
+    if (!state.tableArtifacts) state.tableArtifacts = {};
+    if (!state.tableArtifacts[key]) {
+      state.tableArtifacts[key] = { waterBottle: false, foodPlate: false, emptyPlate: false };
+    }
+    return state.tableArtifacts[key];
+  }
+
   function setChefState(next) {
     state.chefState = next;
     if (next === "cooking") sceneManager.playActorAction?.("chef", "cook");
@@ -758,10 +767,20 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     sceneManager.playActorAction?.(waiterId, "serve");
     // 送达后隐藏道具
     if (typeof sceneManager.hideWaiterProp === 'function') sceneManager.hideWaiterProp(waiterId);
+    sceneManager.setTableItem?.(task.tableId, "foodPlate", true);
+    sceneManager.setTableItem?.(task.tableId, "emptyPlate", false);
+    const artifacts = ensureTableArtifacts(task.tableId);
+    artifacts.foodPlate = true;
+    artifacts.emptyPlate = false;
     setTableStatus(task.tableId, "eating", `[送餐] 餐品已送达桌台${task.tableId}，状态切换为就餐中`);
     markCustomerDemandDone(task.tableId, "点餐");
     setTimeout(() => {
       if (state.tableStatus[task.tableId] === "eating") {
+        sceneManager.setTableItem?.(task.tableId, "foodPlate", false);
+        sceneManager.setTableItem?.(task.tableId, "emptyPlate", true);
+        const eatingArtifacts = ensureTableArtifacts(task.tableId);
+        eatingArtifacts.foodPlate = false;
+        eatingArtifacts.emptyPlate = true;
         setTableStatus(task.tableId, "checkout", `桌台${task.tableId}就餐结束，状态切换为待结账`);
       }
     }, state.delays.eatMs);
@@ -810,6 +829,9 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     await moveToTableSide(waiterId, task.tableId, getMoveDuration(1100), "送水配送");
     // 送达后隐藏水瓶道具
     if (typeof sceneManager.hideWaiterProp === 'function') sceneManager.hideWaiterProp(waiterId);
+    sceneManager.setTableItem?.(task.tableId, "waterBottle", true);
+    const artifacts = ensureTableArtifacts(task.tableId);
+    artifacts.waterBottle = true;
     logger.log(`[送水] 桌台${task.tableId}送水完成`);
     markCustomerDemandDone(task.tableId, "送水");
   }
@@ -829,6 +851,22 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     logger.log(`[收餐] ${waiterLabel(waiterId)}前往桌台${task.tableId}收餐`);
     await moveToTableSide(waiterId, task.tableId, getMoveDuration(1100), "收餐");
     await waitMs(300);
+    const artifacts = ensureTableArtifacts(task.tableId);
+    const hasBottle = !!artifacts.waterBottle;
+    const hasPlate = !!artifacts.emptyPlate || !!artifacts.foodPlate;
+    if (hasBottle || hasPlate) {
+      const carryType = hasPlate ? "food" : "water";
+      sceneManager.showWaiterProp?.(waiterId, carryType);
+      sceneManager.setTableItem?.(task.tableId, "waterBottle", false);
+      sceneManager.setTableItem?.(task.tableId, "foodPlate", false);
+      sceneManager.setTableItem?.(task.tableId, "emptyPlate", false);
+      artifacts.waterBottle = false;
+      artifacts.foodPlate = false;
+      artifacts.emptyPlate = false;
+      logger.log(`[收餐] 已从桌台${task.tableId}收走${hasBottle ? "水瓶" : ""}${hasBottle && hasPlate ? "和" : ""}${hasPlate ? "盘子" : ""}`);
+    } else {
+      logger.log(`[收餐] 桌台${task.tableId}无可收物件，直接执行回收流程`);
+    }
     const waypointList = SERVICE_POINTS.cleanupWaypoints?.[task.tableId] || [];
     for (const waypoint of waypointList) {
       logger.log(`[收餐] 服务员执行避障中转（桌台${task.tableId}）`);
@@ -845,6 +883,8 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       stopDistance: ROBOT_SAFE_DISTANCE * 0.2
     });
     await waitMs(state.delays.cleanupMs);
+    sceneManager.hideWaiterProp?.(waiterId);
+    sceneManager.clearTableItems?.(task.tableId);
     setTableStatus(task.tableId, "idle", `桌台${task.tableId}收餐完成，状态重置为空闲`);
     markCustomerDemandDone(task.tableId, "收餐");
   }

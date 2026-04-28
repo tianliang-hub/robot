@@ -5,9 +5,16 @@ export function createStateStore() {
   const tableStatus = Object.fromEntries(
     Object.keys(SCENE_POINTS.tables || {}).map((tableId) => [String(tableId), "idle"])
   );
+  const tableArtifacts = Object.fromEntries(
+    Object.keys(SCENE_POINTS.tables || {}).map((tableId) => [
+      String(tableId),
+      { waterBottle: false, foodPlate: false, emptyPlate: false }
+    ])
+  );
   const state = {
     taskQueue: [],
     tableStatus,
+    tableArtifacts,
     customers: CUSTOMER_BINDINGS.map((item) => ({
       id: item.id,
       name: item.name,
