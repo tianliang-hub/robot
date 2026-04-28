@@ -6,6 +6,7 @@ export const RAYCAST_THROTTLE_MS = 33;
 export const TASK_PRIORITY = {
   情绪安抚: 5,
   送水: 4,
+  智能服务: 4.2,
   结账: 3,
   冰箱取货: 2,
   送餐: 2,

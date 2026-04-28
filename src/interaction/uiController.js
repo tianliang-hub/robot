@@ -1,9 +1,9 @@
 import { CUSTOMER_MOOD_LABEL, TABLE_STATE_LABEL } from "../config/appConfig.js";
 import { sendMessage } from "../ai/chatClient.js";
-import { extractIntent } from "../ai/intentExtractor.js";
+import { extractIntent, extractIntents } from "../ai/intentExtractor.js";
 import { parseNaturalCommand } from "../ai/nlParser.js";
 
-export function createUIController({ store, scheduler, logger, replayRecorder }) {
+export function createUIController({ store, scheduler, logger }) {
   const chefStatusEl = document.getElementById("chef-status");
   const waiterStatusEl = document.getElementById("waiter-status");
   const waiter2StatusEl = document.getElementById("waiter2-status");
@@ -17,9 +17,6 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
   const cmdInput = document.getElementById("cmd-input");
   const cmdSendBtn = document.getElementById("cmd-send");
   const voiceBtn = document.getElementById("voice-btn");
-  const scenarioSelect = document.getElementById("scenario-select");
-  const replayBtn = document.getElementById("replay-btn");
-  const demoScriptBtn = document.getElementById("demo-script-btn");
   const buttons = Array.from(document.querySelectorAll(".task-btn[data-action]"));
   const smartButtons = Array.from(document.querySelectorAll(".task-btn[data-smart-action]"));
   const customerPanel = document.getElementById("customer-panel");
@@ -184,23 +181,6 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
     });
   }
 
-  function bindScenarioControls() {
-    scenarioSelect.addEventListener("change", () => scheduler.applyScenario(scenarioSelect.value));
-    replayBtn.addEventListener("click", async () => {
-      const events = replayRecorder.getEvents();
-      if (events.length === 0) {
-        logger.log("[回放] 当前无可回放事件。");
-        return;
-      }
-      logger.log("[回放] 开始回放事件流...");
-      await replayRecorder.playback((entry) => {
-        logger.log(`[回放] ${entry.message}`, { replayTag: true, record: false });
-      }, 2.4);
-      logger.log("[回放] 事件流回放结束。");
-    });
-    demoScriptBtn.addEventListener("click", () => scheduler.runDemoScript());
-  }
-
   function bindCustomerPanel() {
     function selectedCustomer() {
       return store.state.customers.find((item) => item.id === store.state.selectedCustomerId) || null;
@@ -242,7 +222,7 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
     globalChatBtn.addEventListener("click", () => {
       const fallbackTableId =
         store.state.customers[0]?.tableId || Object.keys(store.state.tableStatus)[0] || "1";
-      scheduler.startSmartConversation(fallbackTableId, "order", "global");
+      scheduler.startSmartConversation(fallbackTableId, "service", "global");
     });
 
     chatModeSelect.addEventListener("change", () => {
@@ -265,9 +245,13 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
         scheduler.endChatConversation("用户输入聊天结束");
         return;
       }
-      if (parsedIntent.type === "intent_switch") {
+      const intentChain = extractIntents(text);
+      if (intentChain.length > 0) {
+        scheduler.appendChatPendingIntents(intentChain);
+        logger.log(`[智能意图] 本句识别意图序列：${intentChain.join(" -> ")}`);
+      } else if (parsedIntent.type === "intent_switch") {
         scheduler.updateChatPendingIntent(parsedIntent.intent);
-        logger.log(`[智能意图] 对话中识别到意图切换：${parsedIntent.intent}`);
+        logger.log(`[智能意图] 对话中识别到意图：${parsedIntent.intent}`);
       }
 
       scheduler.setChatWaiting(true);
@@ -304,7 +288,6 @@ export function createUIController({ store, scheduler, logger, replayRecorder })
   function mount({ onCustomerSelected } = {}) {
     bindButtons();
     bindCommandInput();
-    bindScenarioControls();
     bindCustomerPanel();
     bindChatPanel();
     if (onCustomerSelected) {

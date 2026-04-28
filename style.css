@@ -318,7 +318,9 @@ button {
 }
 
 #task-list {
-  max-height: 320px;
+  max-height: none;
+  height: 100%;
+  min-height: 380px;
   overflow-y: auto;
   border: 1px solid rgba(117, 161, 180, 0.2);
   border-radius: 8px;

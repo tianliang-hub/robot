@@ -27,6 +27,7 @@ export function createStateStore() {
       sessionId: "",
       messages: [],
       pendingIntent: null,
+      pendingIntents: [],
       isWaitingReply: false
     },
     waiterConversationState: "idle",

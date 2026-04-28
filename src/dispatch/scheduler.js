@@ -14,13 +14,10 @@ import {
 } from "../config/appConfig.js";
 import { createPathPlanner } from "./pathPlanner.js";
 
-const SMART_TASK_BY_INTENT = {
-  order: "智能点单",
-  water: "智能送水",
-  checkout: "智能结账"
-};
+const SMART_UNIFIED_TYPE = "智能服务";
 
 const SMART_INTENT_BY_TASK = {
+  [SMART_UNIFIED_TYPE]: "order",
   智能点单: "order",
   智能送水: "water",
   智能结账: "checkout"
@@ -33,6 +30,7 @@ const TABLE_BOUND_TASKS = new Set([
   "收餐",
   "冰箱取货",
   "情绪安抚",
+  SMART_UNIFIED_TYPE,
   "智能点单",
   "智能送水",
   "智能结账"
@@ -77,7 +75,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       return null;
     }
     if (
-      (type === "点餐" || type === "智能点单") &&
+      (type === "点餐" || type === "智能点单" || type === SMART_UNIFIED_TYPE) &&
       state.taskQueue.length >= FLOW_CONFIG.waiterQueueGuardMax &&
       source !== "emotion"
     ) {
@@ -481,6 +479,20 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
   function updateChatPendingIntent(intent) {
     if (!state.chat.active) return;
     state.chat.pendingIntent = intent;
+    if (!state.chat.pendingIntents) state.chat.pendingIntents = [];
+    state.chat.pendingIntents.push(intent);
+    store.notify();
+  }
+
+  function appendChatPendingIntents(intents) {
+    if (!state.chat.active || !intents || intents.length === 0) return;
+    if (!state.chat.pendingIntents) state.chat.pendingIntents = [];
+    for (const it of intents) {
+      if (it === "order" || it === "water" || it === "checkout") {
+        state.chat.pendingIntents.push(it);
+        state.chat.pendingIntent = it;
+      }
+    }
     store.notify();
   }
 
@@ -837,9 +849,9 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
   }
 
   async function handleSmartTask(task, waiterId) {
-    const intent = SMART_INTENT_BY_TASK[task.type] || "order";
+    const defaultIntent = SMART_INTENT_BY_TASK[task.type] || "order";
     if (state.chat.active) {
-      addTask(task.type, task.tableId, task.priority, "smart", true);
+      addTask(SMART_UNIFIED_TYPE, task.tableId, task.priority, "smart", true);
       return;
     }
     const key = String(task.tableId);
@@ -860,27 +872,37 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
         messages: [
           {
             role: "assistant",
-            content: `你好，我是桌台${task.tableId}服务员。你可以问我“推荐吃什么”，也可以直接说“要水/结账”。输入“聊天结束”即可继续任务。`,
+            content: `你好，我是桌台${task.tableId}服务员。需要点单、要水或结账都可以直接说；一句话里也可以说多件（例如先送水再结账）。输入“聊天结束”后我会按顺序安排任务。`,
             at: Date.now()
           }
         ],
-        pendingIntent: intent,
+        pendingIntent: defaultIntent,
+        pendingIntents: [],
         isWaitingReply: false
       };
       store.notify();
       logger.log("[智能对话] 服务员已到桌，进入会话。");
       await waitConversationEnd();
       setConversationState(waiterId, "resuming");
-      const nextIntent = state.chat.pendingIntent || intent;
       delete state.smartServiceHost[key];
       store.notify();
-      const hasFollowupTask = enqueueFollowupByIntent(task.tableId, nextIntent, waiterId);
+      const collected =
+        state.chat.pendingIntents && state.chat.pendingIntents.length > 0
+          ? [...state.chat.pendingIntents]
+          : [state.chat.pendingIntent || defaultIntent].filter(Boolean);
+      let hasFollowupTask = false;
+      for (const it of collected) {
+        if (enqueueFollowupByIntent(task.tableId, it, waiterId)) {
+          hasFollowupTask = true;
+        }
+      }
       patchChat({
         active: false,
         tableId: null,
         sessionId: "",
         messages: [],
         pendingIntent: null,
+        pendingIntents: [],
         isWaitingReply: false
       });
       setConversationState(waiterId, "idle");
@@ -1019,7 +1041,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     return handleAction("order", key);
   }
 
-  function startSmartConversation(tableId, intent, mode = "table") {
+  function startSmartConversation(tableId, _legacyIntent, mode = "table") {
     const key = String(tableId);
     if (!tableHasCustomer(key)) {
       logger.log(`[智能对话] 桌台${key}未绑定顾客，无法开启智能会话。`);
@@ -1029,11 +1051,15 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       logger.log("[智能对话] 当前已有进行中的会话，请先结束。");
       return false;
     }
-    const taskType = SMART_TASK_BY_INTENT[intent];
-    if (!taskType) return false;
-    if (hasSameTask(taskType, key)) return true;
+    if (hasSameTask(SMART_UNIFIED_TYPE, key)) return true;
     state.chat.mode = mode;
-    addTask(taskType, key, TASK_PRIORITY["送水"] + 0.2, "smart", false);
+    addTask(
+      SMART_UNIFIED_TYPE,
+      key,
+      TASK_PRIORITY[SMART_UNIFIED_TYPE] ?? 4.2,
+      "smart",
+      false
+    );
     return true;
   }
 
@@ -1169,6 +1195,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     handleCustomerRequest,
     startSmartConversation,
     appendChatMessage,
+    appendChatPendingIntents,
     setChatWaiting,
     updateChatPendingIntent,
     endChatConversation,

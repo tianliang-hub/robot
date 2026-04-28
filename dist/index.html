@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>智慧餐厅多机器人协同调度控制台</title>
-    <script type="module" crossorigin src="/assets/index-BXDlI_Xx.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-D1-SMMR2.css">
+    <script type="module" crossorigin src="/assets/index-Dnvm-fMK.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DbDt6P3d.css">
   </head>
   <body>
   <div id="app">
@@ -36,9 +36,7 @@
               <button class="task-btn cleanup" data-action="cleanup" data-table="1">收餐清理</button>
             </div>
             <div class="action-grid smart-grid">
-              <button class="task-btn smart" data-smart-action="order" data-table="1">智能点单</button>
-              <button class="task-btn smart" data-smart-action="water" data-table="1">智能要水</button>
-              <button class="task-btn smart" data-smart-action="checkout" data-table="1">智能结账</button>
+              <button class="task-btn smart" data-smart-action="service" data-table="1">智能服务</button>
             </div>
           </article>
 
@@ -54,9 +52,7 @@
               <button class="task-btn cleanup" data-action="cleanup" data-table="2">收餐清理</button>
             </div>
             <div class="action-grid smart-grid">
-              <button class="task-btn smart" data-smart-action="order" data-table="2">智能点单</button>
-              <button class="task-btn smart" data-smart-action="water" data-table="2">智能要水</button>
-              <button class="task-btn smart" data-smart-action="checkout" data-table="2">智能结账</button>
+              <button class="task-btn smart" data-smart-action="service" data-table="2">智能服务</button>
             </div>
           </article>
 
@@ -72,9 +68,7 @@
               <button class="task-btn cleanup" data-action="cleanup" data-table="3">收餐清理</button>
             </div>
             <div class="action-grid smart-grid">
-              <button class="task-btn smart" data-smart-action="order" data-table="3">智能点单</button>
-              <button class="task-btn smart" data-smart-action="water" data-table="3">智能要水</button>
-              <button class="task-btn smart" data-smart-action="checkout" data-table="3">智能结账</button>
+              <button class="task-btn smart" data-smart-action="service" data-table="3">智能服务</button>
             </div>
           </article>
 
@@ -90,9 +84,7 @@
               <button class="task-btn cleanup" data-action="cleanup" data-table="4">收餐清理</button>
             </div>
             <div class="action-grid smart-grid">
-              <button class="task-btn smart" data-smart-action="order" data-table="4">智能点单</button>
-              <button class="task-btn smart" data-smart-action="water" data-table="4">智能要水</button>
-              <button class="task-btn smart" data-smart-action="checkout" data-table="4">智能结账</button>
+              <button class="task-btn smart" data-smart-action="service" data-table="4">智能服务</button>
             </div>
           </article>
         </section>
@@ -187,23 +179,6 @@
             <h3>任务队列</h3>
           </div>
           <ul id="task-list"></ul>
-        </section>
-
-        <section class="card card-group control-card">
-          <div class="group-head">
-            <h3>演示控制</h3>
-          </div>
-          <div class="cmd-row">
-            <select id="scenario-select">
-              <option value="normal">平峰模式</option>
-              <option value="lunchRush">午高峰</option>
-              <option value="emergency">突发事件</option>
-            </select>
-            <button id="replay-btn" class="task-btn">回放事件流</button>
-          </div>
-          <div class="cmd-row">
-            <button id="demo-script-btn" class="task-btn">一键演示脚本</button>
-          </div>
         </section>
 
         <section class="card card-group metrics-card">
