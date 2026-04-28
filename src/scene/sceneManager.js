@@ -15,6 +15,11 @@ import {
   WAITER_TURN_SPEED
 } from "../config/appConfig.js";
 
+const KIT_ENV_FRIDGE_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_Fridge.gltf",
+  import.meta.url
+).href;
+
 export function createSceneManager({ logger }) {
   const threeContainer = document.getElementById("three-container");
   const loadingIndicator = document.getElementById("loading-indicator");
@@ -121,6 +126,10 @@ export function createSceneManager({ logger }) {
   const obstacleMarkers = new Map();
   const staticObstacleCells = new Set();
   const tableUnderObstacleCells = new Set();
+  let fridgeDoorNode = null;
+  let fridgeDoorClosedY = null;
+  let fridgeDoorOpenSign = -1;
+  let fridgeDoorTween = null;
 
   // ── 道具系统 ──
   // propCache: propType -> THREE.Group (已加载好，常驻 scene 外，随时 reparent)
@@ -134,12 +143,12 @@ export function createSceneManager({ logger }) {
       { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.18, posY: 0.06 }
     ],
     water: [
-      { url: "/models/props/bottle.glb", scale: 0.4, posY: 0 }
+      { url: "/models/props/bottle.glb", scale: 0.28, posY: 0 }
     ]
   };
 
   // 道具 slot 挂载在锚点上的局部偏移（相对锚点原点，Y≈手高）
-  const PROP_SLOT_OFFSET = new THREE.Vector3(0, 1.05, 0);
+  const PROP_SLOT_OFFSET = new THREE.Vector3(0, 1, 0);
 
   const quality = resolveQuality();
   dirLight.castShadow = true;
@@ -226,8 +235,9 @@ export function createSceneManager({ logger }) {
   async function spawnStaticModel(plan, parent = scene) {
     let gltf = null;
     let usedFallback = false;
+    const preferredUrl = plan?.name === "fridge" ? KIT_ENV_FRIDGE_URL : plan.url;
     try {
-      gltf = await loadGLB(plan.url);
+      gltf = await loadGLB(preferredUrl);
     } catch (error) {
       if (!plan.fallbackUrl) throw error;
       gltf = await loadGLB(plan.fallbackUrl);
@@ -246,6 +256,23 @@ export function createSceneManager({ logger }) {
     parent.add(model);
     editableTargets.push({ name: plan.name, object3D: model });
     modelRefs.set(plan.name, model);
+
+    if (plan.name === "fridge") {
+      let foundDoor = null;
+      model.traverse((node) => {
+        if (foundDoor || !node?.name) return;
+        const n = String(node.name).toLowerCase();
+        if (n.includes("environment_fridge_door")) foundDoor = node;
+        else if (n.includes("fridge") && n.includes("door")) foundDoor = node;
+      });
+      if (foundDoor) {
+        fridgeDoorNode = foundDoor;
+        fridgeDoorClosedY = foundDoor.rotation.y;
+        logger.log(`[冰箱] 门节点已定位：${foundDoor.name}`);
+      } else {
+        logger.log("[冰箱] 未找到门节点 Environment_Fridge_Door");
+      }
+    }
 
     // 提取并存储环境模型的动画（如果有，比如冰箱门开关）
     if (gltf.animations && gltf.animations.length > 0) {
@@ -477,7 +504,13 @@ export function createSceneManager({ logger }) {
       slot.position.copy(PROP_SLOT_OFFSET);
       slot.visible = false;
       anchor.add(slot);
-      waiterPropSlots.set(waiterId, { slot, current: null, propParent: null, trackingBone: null });
+      waiterPropSlots.set(waiterId, {
+        slot,
+        current: null,
+        currentType: null,
+        propParent: null,
+        trackingBone: null
+      });
     });
   }
 
@@ -517,6 +550,7 @@ export function createSceneManager({ logger }) {
     propGroup.visible = true;
     propGroup.traverse((c) => { if (c !== propGroup) c.visible = true; });
     entry.current = propGroup;
+    entry.currentType = propType;
   }
 
   function hideWaiterProp(waiterId) {
@@ -525,9 +559,26 @@ export function createSceneManager({ logger }) {
     if (entry.propParent) entry.propParent.remove(entry.current);
     entry.slot.visible = false;
     entry.current = null;
+    entry.currentType = null;
     entry.propParent = null;
     entry.trackingBone = null;
     logger.log(`[道具] ${waiterId} 隐藏道具`);
+  }
+
+  function setFridgeDoorOpen(open, durationMs = 280) {
+    if (!fridgeDoorNode || fridgeDoorClosedY == null) return;
+    if (fridgeDoorTween) cancelAnimationFrame(fridgeDoorTween);
+    const from = fridgeDoorNode.rotation.y;
+    const to = open ? fridgeDoorClosedY - fridgeDoorOpenSign * (Math.PI / 2) : fridgeDoorClosedY;
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / Math.max(1, durationMs));
+      const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      fridgeDoorNode.rotation.y = from + (to - from) * eased;
+      if (t < 1) fridgeDoorTween = requestAnimationFrame(step);
+      else fridgeDoorTween = null;
+    };
+    fridgeDoorTween = requestAnimationFrame(step);
   }
 
   async function loadModelsInStages(actorPlans, staticPlans) {
@@ -1070,14 +1121,30 @@ export function createSceneManager({ logger }) {
 
         // 加上适当的偏移量，让盘子在手的正上方
         // 这里基于机器人的局部坐标系：Y 是上，Z 是前，X 是左右
-        boneWorldPos.y += 0.15; // 托高一点
-        boneWorldPos.z += 0.1;  // 往前一点
-        boneWorldPos.x -= 0.48; // 进一步向机器人的右手边靠多一点
+        boneWorldPos.y -= 0.7; // 托高一点
+        boneWorldPos.z -= 0.5; // 减少前探，水瓶更靠近手部
+        boneWorldPos.x -= 0.2; // 进一步向机器人的右手边靠多一点
 
         // 平滑插值，消除骨骼动画带来的高频抖动
         entry.current.position.lerp(boneWorldPos, 0.15);
-        // 强制保持绝对水平
-        entry.current.rotation.set(0, 0, 0);
+        if (entry.currentType === "water") {
+          // 水瓶跟随手臂姿态：把手骨世界旋转转换为 slot 局部旋转后再平滑插值
+          const boneWorldQuat = new THREE.Quaternion();
+          const slotWorldQuat = new THREE.Quaternion();
+          const localTargetQuat = new THREE.Quaternion();
+          entry.trackingBone.getWorldQuaternion(boneWorldQuat);
+          entry.slot.getWorldQuaternion(slotWorldQuat);
+          localTargetQuat.copy(slotWorldQuat).invert().multiply(boneWorldQuat);
+          // 新增：握持姿态偏移（90°）
+          const gripOffset = new THREE.Quaternion().setFromEuler(
+             new THREE.Euler(0, 0, Math.PI / 2) // 不对就改成 X/Y 轴试
+          );
+          localTargetQuat.multiply(gripOffset);
+          entry.current.quaternion.slerp(localTargetQuat, 0.18);
+        } else {
+          // 托盘食物仍保持近水平，避免倾斜
+          entry.current.rotation.set(0, 0, 0);
+        }
       }
     });
 
@@ -1116,6 +1183,11 @@ export function createSceneManager({ logger }) {
     clearPathLine,
     playActorAction,
     playStaticModelAnimation: (name, reversed = false) => {
+      if (name === "fridge") {
+        setFridgeDoorOpen(!reversed, reversed ? 220 : 300);
+        logger.log(`[冰箱] ${reversed ? "关门" : "开门"}触发`);
+        return;
+      }
       const model = modelRefs.get(name);
       if (!model || !model.userData.mixer || !model.userData.actions) return;
       const action = Array.from(model.userData.actions.values())[0];
@@ -1137,6 +1209,7 @@ export function createSceneManager({ logger }) {
     },
     showWaiterProp,
     hideWaiterProp,
+    setFridgeDoorOpen,
     setGridVisible(visible) {
       gridHelper.visible = Boolean(visible);
     },

@@ -70,6 +70,13 @@ export const SCENE_POINTS = {
   }
 };
 
+const FRIDGE_POS = new THREE.Vector3(-7, 0, -1.5);
+const FRIDGE_FACE_DIR = new THREE.Vector3()
+  .subVectors(SCENE_POINTS.standby, FRIDGE_POS)
+  .setY(0);
+if (FRIDGE_FACE_DIR.lengthSq() > 1e-6) FRIDGE_FACE_DIR.normalize();
+export const FRIDGE_ROTATION_Y = Math.atan2(FRIDGE_FACE_DIR.x, FRIDGE_FACE_DIR.z);
+
 export const SERVICE_POINTS = {
   transferChef: new THREE.Vector3(0, 0, -6.9),
   transferChefNear: new THREE.Vector3(0, 0, -7.7),
@@ -77,7 +84,12 @@ export const SERVICE_POINTS = {
   transferReport: new THREE.Vector3(0, 0, -4.8),
   cookStation: new THREE.Vector3(-4.8, 0, -8.7),
   recycleService: new THREE.Vector3(-6.2, 0, -4.3),
-  fridgeService: new THREE.Vector3(-8.3, 0, -4.3),
+  // 冰箱正面朝向服务员初始位 standby，服务点放在正面外侧
+  fridgeService: new THREE.Vector3(
+    FRIDGE_POS.x + FRIDGE_FACE_DIR.x * 1.2,
+    0,
+    FRIDGE_POS.z + FRIDGE_FACE_DIR.z * 1.2
+  ),
   cleanupWaypoints: {
     "1": [new THREE.Vector3(-6.8, 0, 1.2)],
     "2": [new THREE.Vector3(6.8, 0, 1.2)],
@@ -272,7 +284,7 @@ export const STATIC_MODEL_PLAN = [
   { name: "wall_redwood_left", url: "/models/environment/wall_redwood.glb", pos: [-2.2, 2.3, -11.5], scale: 0.14, stage: 2, importance: "low" },
   { name: "wall_redwood_right", url: "/models/environment/wall_redwood.glb", pos: [2.8, 2.3, -11.5], scale: 0.14, stage: 2, importance: "low" },
   { name: "oven", url: "/models/environment/oven.glb", pos: [-6.9, 0, -9.5], scale: 1, rotationY: Math.PI / 2, stage: 1, importance: "high" },
-  { name: "fridge", url: "/models/environment/fridge.glb", pos: [-7, 0, -1.5], scale: 0.9, rotationY: THREE.MathUtils.degToRad(88), stage: 1, importance: "high" },
+  { name: "fridge", url: "/models/environment/fridge.glb", pos: [-7, 0, -1.5], scale: 0.9, rotationY: FRIDGE_ROTATION_Y, stage: 1, importance: "high" },
   { name: "wall_shoji_1", url: "/models/environment/wall_shoji.glb", pos: [-6, 0, -10], scale: 1.0, rotationY: 0, stage: 2, importance: "low" },
   { name: "wall_shoji_2", url: "/models/environment/wall_shoji.glb", pos: [-2, 0, -10], scale: 1.0, rotationY: 0, stage: 2, importance: "low" },
   { name: "wall_shoji_3", url: "/models/environment/wall_shoji.glb", pos: [2, 0, -10], scale: 1.0, rotationY: 0, stage: 2, importance: "low" },

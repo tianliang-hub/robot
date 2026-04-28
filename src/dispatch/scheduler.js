@@ -782,9 +782,11 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       stopDistance: ROBOT_SAFE_DISTANCE * 0.25
     });
     
-    // 打开冰箱
-    if (typeof sceneManager.playStaticModelAnimation === 'function') {
-      sceneManager.playStaticModelAnimation('fridge', false);
+    // 打开冰箱（优先走门节点动画）
+    if (typeof sceneManager.setFridgeDoorOpen === "function") {
+      sceneManager.setFridgeDoorOpen(true, getMoveDuration(280));
+    } else if (typeof sceneManager.playStaticModelAnimation === "function") {
+      sceneManager.playStaticModelAnimation("fridge", false);
     }
     await waitMs(600); // 等待冰箱打开动画
 
@@ -798,8 +800,10 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     await waitMs(300);
 
     // 关上冰箱
-    if (typeof sceneManager.playStaticModelAnimation === 'function') {
-      sceneManager.playStaticModelAnimation('fridge', true);
+    if (typeof sceneManager.setFridgeDoorOpen === "function") {
+      sceneManager.setFridgeDoorOpen(false, getMoveDuration(220));
+    } else if (typeof sceneManager.playStaticModelAnimation === "function") {
+      sceneManager.playStaticModelAnimation("fridge", true);
     }
 
     setWaiterState(waiterId, "delivering");
@@ -855,8 +859,10 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     });
     
     // 打开冰箱
-    if (typeof sceneManager.playStaticModelAnimation === 'function') {
-      sceneManager.playStaticModelAnimation('fridge', false);
+    if (typeof sceneManager.setFridgeDoorOpen === "function") {
+      sceneManager.setFridgeDoorOpen(true, getMoveDuration(280));
+    } else if (typeof sceneManager.playStaticModelAnimation === "function") {
+      sceneManager.playStaticModelAnimation("fridge", false);
     }
     await waitMs(600); // 等待冰箱打开动画
     
@@ -865,8 +871,10 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     await waitMs(300);
 
     // 关上冰箱
-    if (typeof sceneManager.playStaticModelAnimation === 'function') {
-      sceneManager.playStaticModelAnimation('fridge', true);
+    if (typeof sceneManager.setFridgeDoorOpen === "function") {
+      sceneManager.setFridgeDoorOpen(false, getMoveDuration(220));
+    } else if (typeof sceneManager.playStaticModelAnimation === "function") {
+      sceneManager.playStaticModelAnimation("fridge", true);
     }
 
     setWaiterState(waiterId, "delivering");
