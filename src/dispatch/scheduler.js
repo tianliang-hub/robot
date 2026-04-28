@@ -69,7 +69,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     store.notify();
   }
 
-  function addTask(type, tableId, priority = TASK_PRIORITY[type], source = "ui", silent = false) {
+  function addTask(type, tableId, priority = TASK_PRIORITY[type], source = "ui", silent = false, extra = {}) {
     if (TABLE_BOUND_TASKS.has(type) && !tableHasCustomer(String(tableId))) {
       if (!silent) {
         logger.log(`[空桌保护] 桌台${tableId}未绑定顾客，已忽略${type}任务。`);
@@ -84,13 +84,15 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       logger.log("[调度保护] 当前队列较长，已延缓新点餐注入，请优先消化现有任务。");
       return null;
     }
+    const { preferredWaiterId } = extra && typeof extra === "object" ? extra : {};
     const task = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       type,
       tableId: String(tableId),
       priority,
       source,
-      createdAt: performance.now()
+      createdAt: performance.now(),
+      ...(preferredWaiterId ? { preferredWaiterId: String(preferredWaiterId) } : {})
     };
     state.taskQueue.push(task);
     sortQueue();
@@ -127,6 +129,19 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
 
   function waitMs(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function isTaskEligibleForWaiter(task, waiterId) {
+    if (task.preferredWaiterId && task.preferredWaiterId !== waiterId) return false;
+    const host = state.smartServiceHost?.[task.tableId];
+    if (host && host !== waiterId) return false;
+    return true;
+  }
+
+  function dequeueTaskForWaiter(waiterId) {
+    const idx = state.taskQueue.findIndex((task) => isTaskEligibleForWaiter(task, waiterId));
+    if (idx < 0) return null;
+    return state.taskQueue.splice(idx, 1)[0];
   }
 
   function getMoveDuration(base) {
@@ -582,8 +597,9 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     if (changed) store.notify();
   }
 
-  function enqueueFollowupByIntent(tableId, intent) {
+  function enqueueFollowupByIntent(tableId, intent, hostWaiterId) {
     const key = String(tableId);
+    const pref = hostWaiterId ? { preferredWaiterId: hostWaiterId } : {};
     if (intent === "order") {
       if (state.tableStatus[key] !== "waiting") {
         const from = state.tableStatus[key];
@@ -591,7 +607,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
         setTableStatus(key, "waiting", `桌台${key}状态切换：${fromLabel} -> 等餐中`);
       }
       enqueueDemandForTable(key, "点餐", "smart");
-      const task = addTask("点餐", key, TASK_PRIORITY["点餐"], "smart", true);
+      const task = addTask("点餐", key, TASK_PRIORITY["点餐"], "smart", true, pref);
       if (!task) {
         logger.log(`[智能对话] 桌台${key}点餐任务注入失败（队列保护或条件限制），本轮先回待命位。`);
         return false;
@@ -600,7 +616,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     }
     if (intent === "water") {
       enqueueDemandForTable(key, "送水", "smart");
-      const task = addTask("送水", key, TASK_PRIORITY["送水"], "smart", true);
+      const task = addTask("送水", key, TASK_PRIORITY["送水"], "smart", true, pref);
       if (!task) {
         logger.log(`[智能对话] 桌台${key}送水任务注入失败（队列保护或条件限制），本轮先回待命位。`);
         return false;
@@ -610,7 +626,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     if (intent === "checkout") {
       enqueueDemandForTable(key, "结账", "smart");
       if (hasSameTask("结账", key)) return true;
-      const task = addTask("结账", key, TASK_PRIORITY["结账"], "smart", true);
+      const task = addTask("结账", key, TASK_PRIORITY["结账"], "smart", true, pref);
       if (!task) {
         logger.log(`[智能对话] 桌台${key}结账任务注入失败（队列保护或条件限制），本轮先回待命位。`);
         return false;
@@ -826,46 +842,58 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       addTask(task.type, task.tableId, task.priority, "smart", true);
       return;
     }
-    setWaiterState(waiterId, "confirming");
-    setConversationState(waiterId, "movingToCustomer");
-    logger.log(`[智能对话] ${waiterLabel(waiterId)}前往桌台${task.tableId}，准备开启智能会话。`);
-    await moveToTableSide(waiterId, task.tableId, getMoveDuration(930), "智能会话");
-    setConversationState(waiterId, "chatting");
-    state.chat = {
-      active: true,
-      mode: state.chat.mode || "table",
-      tableId: String(task.tableId),
-      sessionId: createSessionId(task.tableId, state.chat.mode || "table"),
-      messages: [
-        {
-          role: "assistant",
-          content: `你好，我是桌台${task.tableId}服务员。你可以问我“推荐吃什么”，也可以直接说“要水/结账”。输入“聊天结束”即可继续任务。`,
-          at: Date.now()
-        }
-      ],
-      pendingIntent: intent,
-      isWaitingReply: false
-    };
+    const key = String(task.tableId);
+    if (!state.smartServiceHost) state.smartServiceHost = {};
+    state.smartServiceHost[key] = waiterId;
     store.notify();
-    logger.log("[智能对话] 服务员已到桌，进入会话。");
-    await waitConversationEnd();
-    setConversationState(waiterId, "resuming");
-    const nextIntent = state.chat.pendingIntent || intent;
-    const hasFollowupTask = enqueueFollowupByIntent(task.tableId, nextIntent);
-    patchChat({
-      active: false,
-      tableId: null,
-      sessionId: "",
-      messages: [],
-      pendingIntent: null,
-      isWaitingReply: false
-    });
-    setConversationState(waiterId, "idle");
-    if (!hasFollowupTask && state.taskQueue.length === 0) {
-      logger.log("[智能对话] 当前无后续任务，服务员返回待命位。");
-      await returnWaiterToStandby(waiterId, "智能对话后无后续任务，回待命位");
+    try {
+      setWaiterState(waiterId, "confirming");
+      setConversationState(waiterId, "movingToCustomer");
+      logger.log(`[智能对话] ${waiterLabel(waiterId)}前往桌台${task.tableId}，准备开启智能会话。`);
+      await moveToTableSide(waiterId, task.tableId, getMoveDuration(930), "智能会话");
+      setConversationState(waiterId, "chatting");
+      state.chat = {
+        active: true,
+        mode: state.chat.mode || "table",
+        tableId: String(task.tableId),
+        sessionId: createSessionId(task.tableId, state.chat.mode || "table"),
+        messages: [
+          {
+            role: "assistant",
+            content: `你好，我是桌台${task.tableId}服务员。你可以问我“推荐吃什么”，也可以直接说“要水/结账”。输入“聊天结束”即可继续任务。`,
+            at: Date.now()
+          }
+        ],
+        pendingIntent: intent,
+        isWaitingReply: false
+      };
+      store.notify();
+      logger.log("[智能对话] 服务员已到桌，进入会话。");
+      await waitConversationEnd();
+      setConversationState(waiterId, "resuming");
+      const nextIntent = state.chat.pendingIntent || intent;
+      delete state.smartServiceHost[key];
+      store.notify();
+      const hasFollowupTask = enqueueFollowupByIntent(task.tableId, nextIntent, waiterId);
+      patchChat({
+        active: false,
+        tableId: null,
+        sessionId: "",
+        messages: [],
+        pendingIntent: null,
+        isWaitingReply: false
+      });
+      setConversationState(waiterId, "idle");
+      if (!hasFollowupTask && state.taskQueue.length === 0) {
+        logger.log("[智能对话] 当前无后续任务，服务员返回待命位。");
+        await returnWaiterToStandby(waiterId, "智能对话后无后续任务，回待命位");
+      }
+      logger.log("[智能对话] 对话结束，继续执行业务任务。");
+    } catch (error) {
+      delete state.smartServiceHost[key];
+      store.notify();
+      throw error;
     }
-    logger.log("[智能对话] 对话结束，继续执行业务任务。");
   }
 
   async function executeTask(task, waiterId) {
@@ -893,7 +921,12 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     store.notify();
     while (true) {
       if (state.taskQueue.length === 0) break;
-      const nextTask = state.taskQueue.shift();
+      const nextTask = dequeueTaskForWaiter(waiterId);
+      if (!nextTask) {
+        if (state.taskQueue.length === 0) break;
+        await waitMs(100);
+        continue;
+      }
       nextTask.assignee = waiterId;
       state.currentTask = nextTask;
       state.currentTasks = state.currentTasks || {};

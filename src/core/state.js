@@ -42,7 +42,9 @@ export function createStateStore() {
     currentTask: null,
     scenario: "normal",
     delays: { ...SCENARIO_PRESETS.normal.delays },
-    loadProgress: 0
+    loadProgress: 0,
+    /** 智能会话期间同桌仅由该服务员服务 tableId -> waiterId */
+    smartServiceHost: {}
   };
 
   function notify() {

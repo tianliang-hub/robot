@@ -213,11 +213,7 @@ export function createSceneManager({ logger }) {
       if (!plan.fallbackUrl) throw error;
       gltf = await loadGLB(plan.fallbackUrl);
       usedFallback = true;
-      if (String(plan.name || "").includes("充电桩")) {
-        logger.log("[模型] 充电桩缺失，已回退椅子占位");
-      } else {
-        logger.log(`[模型] ${plan.name} 主模型加载失败，已回退占位模型`);
-      }
+      logger.log(`[模型] ${plan.name} 主模型加载失败，已回退占位模型`);
     }
     const model = gltf.scene;
     model.scale.setScalar(usedFallback ? (plan.fallbackScale ?? plan.scale ?? 1) : (plan.scale ?? 1));
