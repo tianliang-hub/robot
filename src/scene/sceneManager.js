@@ -127,8 +127,16 @@ export function createSceneManager({ logger }) {
   // waiterPropSlots: waiterId -> { slot: THREE.Group (挂载在锚点上), current: THREE.Group | null }
   const propCache = new Map();
   const waiterPropSlots = new Map();
-  // 道具类型列表（纯 Three.js 几何体构建，无需加载 GLB）
-  const PROP_TYPES = ['food', 'water'];
+  // 道具类型列表与模型定义
+  const WAITER_PROP_DEFS = {
+    food: [
+      { url: "/models/props/plate.glb", scale: 0.21, posY: 0 },
+      { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.18, posY: 0.06 }
+    ],
+    water: [
+      { url: "/models/props/bottle.glb", scale: 0.4, posY: 0 }
+    ]
+  };
 
   // 道具 slot 挂载在锚点上的局部偏移（相对锚点原点，Y≈手高）
   const PROP_SLOT_OFFSET = new THREE.Vector3(0, 1.05, 0);
@@ -397,41 +405,51 @@ export function createSceneManager({ logger }) {
     customerBehaviors.set(key, behavior || "normal");
   }
 
-  // ── 预加载道具（纯 Three.js 几何体） ──
+  // ── 预加载道具模型 ──
   async function preloadWaiterProps() {
-    // 食物道具：圆形托盘 + 食物球
-    const foodGroup = new THREE.Group();
-    const plateMat = new THREE.MeshStandardMaterial({ color: 0xfaf8f0, roughness: 0.5, metalness: 0.05, depthTest: false });
-    const plateMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.025, 24), plateMat);
-    plateMesh.renderOrder = 999;
-    plateMesh.position.y = 0;
-    foodGroup.add(plateMesh);
-    const foodMat = new THREE.MeshStandardMaterial({ color: 0xff7733, roughness: 0.6, metalness: 0.0, depthTest: false });
-    const foodMesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), foodMat);
-    foodMesh.renderOrder = 999;
-    foodMesh.position.y = 0.08;
-    foodGroup.add(foodMesh);
-    // 放大 5 倍，抵消骨骼可能的缩放
-    foodGroup.scale.setScalar(5);
-    propCache.set('food', foodGroup);
+    const allDefs = Object.entries(WAITER_PROP_DEFS);
+    await Promise.allSettled(
+      allDefs.map(async ([propType, parts]) => {
+        const group = new THREE.Group();
+        let loaded = 0;
+        for (const part of parts) {
+          try {
+            const gltf = await loadGLB(part.url);
+            const mesh = gltf.scene;
+            mesh.scale.setScalar(part.scale);
+            mesh.position.y = part.posY ?? 0;
 
-    // 水瓶道具：圆柱体瓶身 + 瓶盖
-    const waterGroup = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x44aaff, roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.88, depthTest: false });
-    const bottleBody = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 16), bodyMat);
-    bottleBody.renderOrder = 999;
-    bottleBody.position.y = 0.11;
-    waterGroup.add(bottleBody);
-    const capMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.4, metalness: 0.3, depthTest: false });
-    const bottleCap = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.03, 12), capMat);
-    bottleCap.renderOrder = 999;
-    bottleCap.position.y = 0.235;
-    waterGroup.add(bottleCap);
-    // 放大 5 倍
-    waterGroup.scale.setScalar(5);
-    propCache.set('water', waterGroup);
-
-    logger.log('[道具] 几何体道具创建完成：food(托盘+食物) / water(水瓶)');
+            // 解决模型在手臂内部不可见的问题：关闭深度测试，提升渲染层级
+            mesh.traverse((child) => {
+              if (!child.isMesh) return;
+              if (child.material) {
+                // 如果模型有多个材质，可能是数组
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                  mat.depthTest = false;
+                  // 让材质亮一点，避免完全没有光照时发黑
+                  if (mat.emissive !== undefined) {
+                    mat.emissive.copy(mat.color).multiplyScalar(0.2);
+                  }
+                });
+              }
+              child.renderOrder = 999;
+              child.castShadow = true;
+              child.receiveShadow = true;
+              child.visible = true;
+            });
+            group.add(mesh);
+            loaded += 1;
+          } catch (_err) {
+            logger.log(`[道具] ${propType} 部件 ${part.url} 加载失败: ${_err}`);
+          }
+        }
+        // 放大 5 倍以抵消骨骼局部缩小
+        group.scale.setScalar(5);
+        propCache.set(propType, group);
+        logger.log(`[道具] ${propType} 预加载完成，共 ${loaded} 个真实模型部件`);
+      })
+    );
 
 
     // 为每个服务员创建 slot Group（无手骨时的备用支撇）
@@ -442,7 +460,7 @@ export function createSceneManager({ logger }) {
       slot.position.copy(PROP_SLOT_OFFSET);
       slot.visible = false;
       anchor.add(slot);
-      waiterPropSlots.set(waiterId, { slot, current: null, propParent: null });
+      waiterPropSlots.set(waiterId, { slot, current: null, propParent: null, trackingBone: null });
     });
   }
 
@@ -461,19 +479,23 @@ export function createSceneManager({ logger }) {
     const handBone = rig?.handBone;
 
     if (handBone) {
-      handBone.add(propGroup);
-      // 局部偏移: Y=0.25 沿前謄轴向手腕方向、Z=0.12 向外伸出手臂
-      propGroup.position.set(0, 0.25, 0.12);
-      propGroup.rotation.set(0, 0, 0);
-      entry.propParent = handBone;
-      logger.log(`[道具] ${waiterId} 手骨挂载: ${propType} -> ${handBone.name}`);
-    } else {
-      // 无手骨：挂载到 slot（锁定在锚点相对位置）
+      // 不直接作为骨骼的子节点，以防继承旋转导致晃动
+      // 而是作为 slot 的子节点，并在 animate 中追踪骨骼位置
       entry.slot.add(propGroup);
+      propGroup.rotation.set(0, 0, 0);
+      entry.propParent = entry.slot;
+      entry.trackingBone = handBone;
+      logger.log(`[道具] ${waiterId} 追踪手骨挂载: ${propType} -> ${handBone.name}`);
+    } else {
+      entry.slot.add(propGroup);
+      propGroup.rotation.set(0, 0, 0);
       entry.slot.visible = true;
       entry.propParent = entry.slot;
+      entry.trackingBone = null;
       logger.log(`[道具] ${waiterId} slot 挂载: ${propType}（无手骨）`);
     }
+
+    entry.slot.visible = true;
 
     propGroup.visible = true;
     propGroup.traverse((c) => { if (c !== propGroup) c.visible = true; });
@@ -487,6 +509,7 @@ export function createSceneManager({ logger }) {
     entry.slot.visible = false;
     entry.current = null;
     entry.propParent = null;
+    entry.trackingBone = null;
     logger.log(`[道具] ${waiterId} 隐藏道具`);
   }
 
@@ -1017,6 +1040,30 @@ export function createSceneManager({ logger }) {
         view.object3D.rotation.z += (0 - view.object3D.rotation.z) * 0.2;
       }
     });
+
+    // 道具位置平滑追踪
+    waiterPropSlots.forEach((entry) => {
+      if (entry.current && entry.trackingBone) {
+        // 获取手骨的世界坐标
+        const boneWorldPos = new THREE.Vector3();
+        entry.trackingBone.getWorldPosition(boneWorldPos);
+
+        // 将世界坐标转为 slot 的局部坐标
+        entry.slot.worldToLocal(boneWorldPos);
+
+        // 加上适当的偏移量，让盘子在手的正上方
+        // 这里基于机器人的局部坐标系：Y 是上，Z 是前，X 是左右
+        boneWorldPos.y += 0.15; // 托高一点
+        boneWorldPos.z += 0.1;  // 往前一点
+        boneWorldPos.x -= 0.48; // 进一步向机器人的右手边靠多一点
+
+        // 平滑插值，消除骨骼动画带来的高频抖动
+        entry.current.position.lerp(boneWorldPos, 0.15);
+        // 强制保持绝对水平
+        entry.current.rotation.set(0, 0, 0);
+      }
+    });
+
     controls.update();
     renderer.render(scene, camera);
     requestAnimationFrame(animate);
