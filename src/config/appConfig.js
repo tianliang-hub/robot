@@ -289,6 +289,12 @@ export const STATIC_MODEL_PLAN = [
   { name: "wall_shoji_2", url: "/models/environment/wall_shoji.glb", pos: [-2, 0, -10], scale: 1.0, rotationY: 0, stage: 2, importance: "low" },
   { name: "wall_shoji_3", url: "/models/environment/wall_shoji.glb", pos: [2, 0, -10], scale: 1.0, rotationY: 0, stage: 2, importance: "low" },
   { name: "wall_shoji_4", url: "/models/environment/wall_shoji.glb", pos: [6, 0, -10], scale: 1.0, rotationY: 0, stage: 2, importance: "low" },
+  { name: "wall_house_left_1", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, -11], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
+  { name: "wall_house_left_2", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, -7], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
+  { name: "wall_house_left_3", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, -3], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
+  { name: "wall_house_left_4", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, 1], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
+  { name: "wall_house_left_5", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, 5], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
+  { name: "wall_house_left_6", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, 9], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
   { name: "顾客A", url: "/models/customers/customer_a.glb", pos: [-6.6, 0, 9.5], scale: 0.8, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
   { name: "顾客B", url: "/models/customers/customer_b.glb", pos: [-3.8, 0, 9.5], scale: 0.8, rotationY: -Math.PI / 2, stage: 2, importance: "medium" },
   { name: "顾客C", url: "/models/customers/customer_c.glb", pos: [6.8, 0, 3.1], scale: 0.8, rotationY: -Math.PI / 2, stage: 2, importance: "medium" }

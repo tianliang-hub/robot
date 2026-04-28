@@ -19,6 +19,44 @@ const KIT_ENV_FRIDGE_URL = new URL(
   "../../Sushi Restaurant Kit/Environment/glTF/Environment_Fridge.gltf",
   import.meta.url
 ).href;
+const KIT_WALL_SHOJI_INTERIOR_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Wall_Shoji_Interior.gltf",
+  import.meta.url
+).href;
+const KIT_FLOOR_WOOD_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Floor_Wood.gltf",
+  import.meta.url
+).href;
+const KIT_DECOR_LIGHT_URL = new URL(
+  "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_Light.gltf",
+  import.meta.url
+).href;
+const KIT_DECOR_PLANT1_URL = new URL(
+  "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_Plant1.gltf",
+  import.meta.url
+).href;
+const KIT_DECOR_PLANT2_URL = new URL(
+  "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_Plant2.gltf",
+  import.meta.url
+).href;
+const KIT_DECOR_SIGN_URL = new URL(
+  "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_Sign.gltf",
+  import.meta.url
+).href;
+const KIT_ENV_ARCH_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_Arch.gltf",
+  import.meta.url
+).href;
+
+const PREFERRED_STATIC_MODEL_URLS = {
+  fridge: KIT_ENV_FRIDGE_URL,
+  wall_house_left_1: KIT_WALL_SHOJI_INTERIOR_URL,
+  wall_house_left_2: KIT_WALL_SHOJI_INTERIOR_URL,
+  wall_house_left_3: KIT_WALL_SHOJI_INTERIOR_URL,
+  wall_house_left_4: KIT_WALL_SHOJI_INTERIOR_URL,
+  wall_house_left_5: KIT_WALL_SHOJI_INTERIOR_URL,
+  wall_house_left_6: KIT_WALL_SHOJI_INTERIOR_URL,
+};
 
 export function createSceneManager({ logger }) {
   const threeContainer = document.getElementById("three-container");
@@ -257,7 +295,7 @@ export function createSceneManager({ logger }) {
   async function spawnStaticModel(plan, parent = scene) {
     let gltf = null;
     let usedFallback = false;
-    const preferredUrl = plan?.name === "fridge" ? KIT_ENV_FRIDGE_URL : plan.url;
+    const preferredUrl = PREFERRED_STATIC_MODEL_URLS[plan?.name] || plan.url;
     try {
       gltf = await loadGLB(preferredUrl);
     } catch (error) {
@@ -827,6 +865,7 @@ export function createSceneManager({ logger }) {
   function shouldProjectStaticObstacle(plan) {
     const name = String(plan?.name || "");
     if (!name) return false;
+    if (plan?.navObstacle === false) return false;
     if (name.startsWith("锚点-桌台")) return true;
     if (NAV_STATIC_OBSTACLE_INCLUDE_NAMES.includes(name)) return true;
     if (!Array.isArray(plan?.pos)) return false;
