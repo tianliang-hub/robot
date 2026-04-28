@@ -29,6 +29,40 @@ const uiController = createUIController({
   replayRecorder
 });
 
+function setupBgm() {
+  const src = "/audio/sounovamusic-nagoya-skyline-409156.mp3";
+  const bgm = new Audio(src);
+  bgm.loop = true;
+  bgm.volume = 0.3;
+  bgm.preload = "auto";
+
+  const tryPlay = async () => {
+    try {
+      await bgm.play();
+      logger.log("[音频] 背景音乐开始播放。");
+      return true;
+    } catch (error) {
+      logger.log(`[音频] 背景音乐自动播放受限，等待交互解锁。${error?.name ? `(${error.name})` : ""}`);
+      return false;
+    }
+  };
+
+  const unlock = async () => {
+    const ok = await tryPlay();
+    if (!ok) return;
+    window.removeEventListener("pointerdown", unlock);
+    window.removeEventListener("keydown", unlock);
+  };
+
+  tryPlay().then((ok) => {
+    if (ok) return;
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+  });
+
+  return bgm;
+}
+
 function initDebugPanel() {
   const params = {
     mode: "showcase",
@@ -103,6 +137,7 @@ async function bootstrap() {
   metrics.render();
   logger.log("系统启动完成，已进入平峰模式。");
   logger.log("你可以通过按钮、3D点击、文本/语音指令三种方式下发任务。");
+  setupBgm();
 
   // 默认记录一次建议日志，作为AI能力入口提示
   advisor.evaluate(store.state);
