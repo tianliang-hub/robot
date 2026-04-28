@@ -122,6 +122,17 @@ export function createSceneManager({ logger }) {
   const staticObstacleCells = new Set();
   const tableUnderObstacleCells = new Set();
 
+  // ── 道具系统 ──
+  // propCache: propType -> THREE.Group (已加载好，常驻 scene 外，随时 reparent)
+  // waiterPropSlots: waiterId -> { slot: THREE.Group (挂载在锚点上), current: THREE.Group | null }
+  const propCache = new Map();
+  const waiterPropSlots = new Map();
+  // 道具类型列表（纯 Three.js 几何体构建，无需加载 GLB）
+  const PROP_TYPES = ['food', 'water'];
+
+  // 道具 slot 挂载在锚点上的局部偏移（相对锚点原点，Y≈手高）
+  const PROP_SLOT_OFFSET = new THREE.Vector3(0, 1.05, 0);
+
   const quality = resolveQuality();
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(MODEL_QUALITY[quality].shadowMap, MODEL_QUALITY[quality].shadowMap);
@@ -246,12 +257,36 @@ export function createSceneManager({ logger }) {
     clips.forEach((clip) => {
       actions.set(clip.name.toLowerCase(), mixer.clipAction(clip));
     });
+
+    // 扫描所有骨骼节点，优先匹配右手前謄骨 LowerArmR
+    const boneNames = [];
+    let handBone = null;
+    // 按优先级顺序：R先于L，即右手优先
+    const handKeywords = ['lowerarmr', 'middle1r', 'index1r', 'upperarmr', 'lowerarml', 'middle1l'];
+    // 先按骨骼建索引
+    const boneMap = new Map();
+    model.traverse((child) => {
+      if (!child.isBone && child.type !== 'Bone') return;
+      boneNames.push(child.name);
+      boneMap.set(child.name.toLowerCase().replace(/[^a-z0-9]/g, ''), child);
+    });
+    // 按关键词顺序匹配，优先匹到 R
+    for (const kw of handKeywords) {
+      if (boneMap.has(kw)) { handBone = boneMap.get(kw); break; }
+    }
+    if (boneNames.length > 0) {
+      logger.log(`[骨骼] ${anchorKey} 共 ${boneNames.length} 个骨：${boneNames.join(', ')}`);
+      logger.log(`[骨骼] ${anchorKey} 手骨：${handBone ? handBone.name : '未自动匹配'}`);
+    }
+
     actorRigs.set(anchorKey, {
       mixer,
       model,
       actions,
       activeAction: null,
       fallbackAction: null,
+      handBone,
+      propParent: null,
       baseTransform: {
         y: model.position.y,
         rotY: model.rotation.y,
@@ -362,6 +397,99 @@ export function createSceneManager({ logger }) {
     customerBehaviors.set(key, behavior || "normal");
   }
 
+  // ── 预加载道具（纯 Three.js 几何体） ──
+  async function preloadWaiterProps() {
+    // 食物道具：圆形托盘 + 食物球
+    const foodGroup = new THREE.Group();
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0xfaf8f0, roughness: 0.5, metalness: 0.05, depthTest: false });
+    const plateMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.025, 24), plateMat);
+    plateMesh.renderOrder = 999;
+    plateMesh.position.y = 0;
+    foodGroup.add(plateMesh);
+    const foodMat = new THREE.MeshStandardMaterial({ color: 0xff7733, roughness: 0.6, metalness: 0.0, depthTest: false });
+    const foodMesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), foodMat);
+    foodMesh.renderOrder = 999;
+    foodMesh.position.y = 0.08;
+    foodGroup.add(foodMesh);
+    // 放大 5 倍，抵消骨骼可能的缩放
+    foodGroup.scale.setScalar(5);
+    propCache.set('food', foodGroup);
+
+    // 水瓶道具：圆柱体瓶身 + 瓶盖
+    const waterGroup = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x44aaff, roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.88, depthTest: false });
+    const bottleBody = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 16), bodyMat);
+    bottleBody.renderOrder = 999;
+    bottleBody.position.y = 0.11;
+    waterGroup.add(bottleBody);
+    const capMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.4, metalness: 0.3, depthTest: false });
+    const bottleCap = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.03, 12), capMat);
+    bottleCap.renderOrder = 999;
+    bottleCap.position.y = 0.235;
+    waterGroup.add(bottleCap);
+    // 放大 5 倍
+    waterGroup.scale.setScalar(5);
+    propCache.set('water', waterGroup);
+
+    logger.log('[道具] 几何体道具创建完成：food(托盘+食物) / water(水瓶)');
+
+
+    // 为每个服务员创建 slot Group（无手骨时的备用支撇）
+    ['waiter', 'waiter2'].forEach((waiterId) => {
+      const anchor = anchors[waiterId];
+      if (!anchor) return;
+      const slot = new THREE.Group();
+      slot.position.copy(PROP_SLOT_OFFSET);
+      slot.visible = false;
+      anchor.add(slot);
+      waiterPropSlots.set(waiterId, { slot, current: null, propParent: null });
+    });
+  }
+
+  function showWaiterProp(waiterId, propType) {
+    const entry = waiterPropSlots.get(waiterId);
+    if (!entry) { console.warn(`[道具] slot 未初始化 waiterId=${waiterId}`); return; }
+    const propGroup = propCache.get(propType);
+    if (!propGroup) { console.warn(`[道具] propCache 无 ${propType}`); return; }
+
+    hideWaiterProp(waiterId);
+
+    // 从旧父节点移除
+    if (propGroup.parent) propGroup.parent.remove(propGroup);
+
+    const rig = actorRigs.get(waiterId);
+    const handBone = rig?.handBone;
+
+    if (handBone) {
+      handBone.add(propGroup);
+      // 局部偏移: Y=0.25 沿前謄轴向手腕方向、Z=0.12 向外伸出手臂
+      propGroup.position.set(0, 0.25, 0.12);
+      propGroup.rotation.set(0, 0, 0);
+      entry.propParent = handBone;
+      logger.log(`[道具] ${waiterId} 手骨挂载: ${propType} -> ${handBone.name}`);
+    } else {
+      // 无手骨：挂载到 slot（锁定在锚点相对位置）
+      entry.slot.add(propGroup);
+      entry.slot.visible = true;
+      entry.propParent = entry.slot;
+      logger.log(`[道具] ${waiterId} slot 挂载: ${propType}（无手骨）`);
+    }
+
+    propGroup.visible = true;
+    propGroup.traverse((c) => { if (c !== propGroup) c.visible = true; });
+    entry.current = propGroup;
+  }
+
+  function hideWaiterProp(waiterId) {
+    const entry = waiterPropSlots.get(waiterId);
+    if (!entry || !entry.current) return;
+    if (entry.propParent) entry.propParent.remove(entry.current);
+    entry.slot.visible = false;
+    entry.current = null;
+    entry.propParent = null;
+    logger.log(`[道具] ${waiterId} 隐藏道具`);
+  }
+
   async function loadModelsInStages(actorPlans, staticPlans) {
     editableTargets.length = 0;
     const staged = [...actorPlans, ...staticPlans];
@@ -400,6 +528,8 @@ export function createSceneManager({ logger }) {
 
     updateLoadProgress(0);
     await runStage(1);
+    // 角色模型加载完成后预加载道具（此时锚点已存在）
+    await preloadWaiterProps();
     await new Promise((resolve) => setTimeout(resolve, 30));
     await runStage(2);
     projectStaticObstacles([...actorPlans, ...staticPlans]);
@@ -920,6 +1050,8 @@ export function createSceneManager({ logger }) {
     moveAnchor,
     setAnchorFacing,
     clearPathLine,
+    showWaiterProp,
+    hideWaiterProp,
     setGridVisible(visible) {
       gridHelper.visible = Boolean(visible);
     },

@@ -746,10 +746,18 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     });
     sceneManager.playActorAction?.(waiterId, "pickup");
     await waitMs(320);
+    // 提取餐品后：显示托盘+食物道具
+    if (typeof sceneManager.showWaiterProp === 'function') {
+      sceneManager.showWaiterProp(waiterId, 'food');
+    } else {
+      logger.log(`[道具错误] showWaiterProp 不存在! 已导出: ${Object.keys(sceneManager).join(', ')}`);
+    }
 
     setWaiterState(waiterId, "delivering");
     await moveToTableSide(waiterId, task.tableId, getMoveDuration(1400), "送餐配送");
     sceneManager.playActorAction?.(waiterId, "serve");
+    // 送达后隐藏道具
+    if (typeof sceneManager.hideWaiterProp === 'function') sceneManager.hideWaiterProp(waiterId);
     setTableStatus(task.tableId, "eating", `[送餐] 餐品已送达桌台${task.tableId}，状态切换为就餐中`);
     markCustomerDemandDone(task.tableId, "点餐");
     setTimeout(() => {
@@ -774,9 +782,17 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       stopDistance: ROBOT_SAFE_DISTANCE * 0.25
     });
     await waitMs(250);
+    // 取水完成后：显示水瓶道具
+    if (typeof sceneManager.showWaiterProp === 'function') {
+      sceneManager.showWaiterProp(waiterId, 'water');
+    } else {
+      logger.log(`[道具错误] showWaiterProp 不存在! 已导出: ${Object.keys(sceneManager).join(', ')}`);
+    }
 
     setWaiterState(waiterId, "delivering");
     await moveToTableSide(waiterId, task.tableId, getMoveDuration(1100), "送水配送");
+    // 送达后隐藏水瓶道具
+    if (typeof sceneManager.hideWaiterProp === 'function') sceneManager.hideWaiterProp(waiterId);
     logger.log(`[送水] 桌台${task.tableId}送水完成`);
     markCustomerDemandDone(task.tableId, "送水");
   }
