@@ -781,12 +781,25 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       faceToMove: true,
       stopDistance: ROBOT_SAFE_DISTANCE * 0.25
     });
-    await waitMs(250);
+    
+    // 打开冰箱
+    if (typeof sceneManager.playStaticModelAnimation === 'function') {
+      sceneManager.playStaticModelAnimation('fridge', false);
+    }
+    await waitMs(600); // 等待冰箱打开动画
+
     // 取水完成后：显示水瓶道具
     if (typeof sceneManager.showWaiterProp === 'function') {
       sceneManager.showWaiterProp(waiterId, 'water');
     } else {
       logger.log(`[道具错误] showWaiterProp 不存在! 已导出: ${Object.keys(sceneManager).join(', ')}`);
+    }
+
+    await waitMs(300);
+
+    // 关上冰箱
+    if (typeof sceneManager.playStaticModelAnimation === 'function') {
+      sceneManager.playStaticModelAnimation('fridge', true);
     }
 
     setWaiterState(waiterId, "delivering");
@@ -840,7 +853,22 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       faceToMove: true,
       stopDistance: ROBOT_SAFE_DISTANCE * 0.2
     });
-    await waitMs(380);
+    
+    // 打开冰箱
+    if (typeof sceneManager.playStaticModelAnimation === 'function') {
+      sceneManager.playStaticModelAnimation('fridge', false);
+    }
+    await waitMs(600); // 等待冰箱打开动画
+    
+    // （这里可以添加显示特定道具的代码，目前暂时省略）
+    
+    await waitMs(300);
+
+    // 关上冰箱
+    if (typeof sceneManager.playStaticModelAnimation === 'function') {
+      sceneManager.playStaticModelAnimation('fridge', true);
+    }
+
     setWaiterState(waiterId, "delivering");
     await moveToTableSide(waiterId, task.tableId, getMoveDuration(1300), "冰箱取货配送");
     logger.log(`[服务] 桌台${task.tableId}冰箱取货服务完成`);

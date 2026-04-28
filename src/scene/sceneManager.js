@@ -246,6 +246,23 @@ export function createSceneManager({ logger }) {
     parent.add(model);
     editableTargets.push({ name: plan.name, object3D: model });
     modelRefs.set(plan.name, model);
+
+    // 提取并存储环境模型的动画（如果有，比如冰箱门开关）
+    if (gltf.animations && gltf.animations.length > 0) {
+      const mixer = new THREE.AnimationMixer(model);
+      const actions = new Map();
+      gltf.animations.forEach((clip) => {
+        const action = mixer.clipAction(clip);
+        action.clampWhenFinished = true;
+        action.loop = THREE.LoopOnce;
+        actions.set(clip.name.toLowerCase(), action);
+      });
+      model.userData.mixer = mixer;
+      model.userData.actions = actions;
+      animationMixers.push(mixer);
+      logger.log(`[模型] ${plan.name} 加载了 ${gltf.animations.length} 个动画`);
+    }
+
     if (String(plan.name || "").startsWith("顾客")) {
       model.userData.customerId = String(plan.name).replace("顾客", "");
       clickableCustomers.push(model);
@@ -1097,6 +1114,27 @@ export function createSceneManager({ logger }) {
     moveAnchor,
     setAnchorFacing,
     clearPathLine,
+    playActorAction,
+    playStaticModelAnimation: (name, reversed = false) => {
+      const model = modelRefs.get(name);
+      if (!model || !model.userData.mixer || !model.userData.actions) return;
+      const action = Array.from(model.userData.actions.values())[0];
+      if (!action) return;
+      
+      action.paused = false;
+      action.reset();
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      
+      if (reversed) {
+        action.timeScale = -1;
+        action.time = action.getClip().duration;
+      } else {
+        action.timeScale = 1;
+        action.time = 0;
+      }
+      action.play();
+    },
     showWaiterProp,
     hideWaiterProp,
     setGridVisible(visible) {
