@@ -889,7 +889,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       const collected =
         state.chat.pendingIntents && state.chat.pendingIntents.length > 0
           ? [...state.chat.pendingIntents]
-          : [state.chat.pendingIntent || defaultIntent].filter(Boolean);
+          : [];
       let hasFollowupTask = false;
       for (const it of collected) {
         if (enqueueFollowupByIntent(task.tableId, it, waiterId)) {
@@ -907,6 +907,7 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
       });
       setConversationState(waiterId, "idle");
       if (!hasFollowupTask && state.taskQueue.length === 0) {
+        logger.log("[智能对话] 未识别到可执行意图，本轮不自动下单，服务员返回待命位。");
         logger.log("[智能对话] 当前无后续任务，服务员返回待命位。");
         await returnWaiterToStandby(waiterId, "智能对话后无后续任务，回待命位");
       }

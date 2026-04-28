@@ -7,6 +7,7 @@ export function createUIController({ store, scheduler, logger }) {
   const chefStatusEl = document.getElementById("chef-status");
   const waiterStatusEl = document.getElementById("waiter-status");
   const waiter2StatusEl = document.getElementById("waiter2-status");
+  const activeTaskListEl = document.getElementById("active-task-list");
   const tableStateEls = Object.fromEntries(
     Array.from(document.querySelectorAll("[id^='table-state-']")).map((el) => {
       const tableId = String(el.id).replace("table-state-", "");
@@ -68,10 +69,29 @@ export function createUIController({ store, scheduler, logger }) {
         : `table-state ${status} empty-table`;
     });
 
+    if (activeTaskListEl) activeTaskListEl.innerHTML = "";
+    const activeTasks = Object.entries(state.currentTasks || {})
+      .filter(([, task]) => Boolean(task))
+      .map(([waiterId, task]) => ({ waiterId, task }));
+    if (activeTaskListEl) {
+      if (activeTasks.length === 0) {
+        const emptyLi = document.createElement("li");
+        emptyLi.textContent = "当前无执行中任务";
+        activeTaskListEl.appendChild(emptyLi);
+      } else {
+        activeTasks.forEach(({ waiterId, task }) => {
+          const li = document.createElement("li");
+          const assignee = waiterId === "waiter2" ? "服务员B" : "服务员A";
+          li.textContent = `[${assignee}] 桌台${task.tableId} - ${task.type}`;
+          activeTaskListEl.appendChild(li);
+        });
+      }
+    }
+
     taskListEl.innerHTML = "";
     if (state.taskQueue.length === 0) {
       const emptyLi = document.createElement("li");
-      emptyLi.textContent = "暂无任务";
+      emptyLi.textContent = "暂无待办任务";
       taskListEl.appendChild(emptyLi);
     } else {
       state.taskQueue.forEach((task, index) => {

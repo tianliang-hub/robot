@@ -1,7 +1,7 @@
 const PATTERNS = [
-  { re: /要水|送水|口渴|来杯水|加水|喝水/g, intent: "water" },
+  { re: /要水|送水|口渴|来杯水|加水|喝水|喝点水|喝口水|来点水|倒杯水|一杯水|白开水|矿泉水|加一杯水|给我倒水|可乐|雪碧|芬达|汽水|饮料|来杯饮料|拿瓶饮料/g, intent: "water" },
   { re: /结账|买单|付款|埋单|刷卡/g, intent: "checkout" },
-  { re: /点餐|下单|推荐|吃什么|点菜|加菜/g, intent: "order" }
+  { re: /点餐|下单|推荐|吃什么|点菜|加菜|吃/g, intent: "order" }
 ];
 
 /**
@@ -45,13 +45,13 @@ export function extractIntent(text) {
   if (/(聊天结束|结束聊天|先这样|bye|再见)/i.test(content)) {
     return { type: "end_chat" };
   }
-  if (/(要水|送水|口渴|来杯水)/.test(content)) {
+  if (/(要水|送水|口渴|来杯水|加水|喝水|喝点水|喝口水|来点水|倒杯水|一杯水|白开水|矿泉水|加一杯水|给我倒水|可乐|雪碧|芬达|汽水|饮料|来杯饮料|拿瓶饮料)/.test(content)) {
     return { type: "intent_switch", intent: "water" };
   }
   if (/(结账|买单|付款)/.test(content)) {
     return { type: "intent_switch", intent: "checkout" };
   }
-  if (/(点餐|下单|推荐|吃什么)/.test(content)) {
+  if (/(点餐|下单|推荐|吃什么|吃)/.test(content)) {
     return { type: "intent_switch", intent: "order" };
   }
   return { type: "chat" };

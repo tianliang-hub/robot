@@ -177,30 +177,39 @@
           <div class="group-head">
             <h3>任务队列</h3>
           </div>
-          <ul id="task-list"></ul>
+          <div class="queue-block">
+            <p class="queue-block-title">执行中任务</p>
+            <ul id="active-task-list"></ul>
+          </div>
+          <div class="queue-block">
+            <p class="queue-block-title">待办任务</p>
+            <ul id="task-list"></ul>
+          </div>
         </section>
 
-        <section class="card card-group metrics-card">
-          <div class="group-head">
-            <h3>仿真指标</h3>
-          </div>
-          <ul id="metrics-list">
-            <li>平均响应时延：<span id="metric-avg-response">0.0s</span></li>
-            <li>任务完成率：<span id="metric-completion-rate">0%</span></li>
-            <li>峰值队列长度：<span id="metric-peak-queue">0</span></li>
-            <li>平均等待时长：<span id="metric-avg-wait">0.0s</span></li>
-          </ul>
-        </section>
       </aside>
     </main>
 
     <footer class="panel log-panel">
-      <div class="group-head">
-        <h2 class="panel-title">系统日志</h2>
-      </div>
-      <div class="log-box">
-        <ul id="log-list"></ul>
-      </div>
+      <section class="log-panel-left">
+        <div class="group-head">
+          <h2 class="panel-title">系统日志</h2>
+        </div>
+        <div class="log-box">
+          <ul id="log-list"></ul>
+        </div>
+      </section>
+      <section class="card card-group metrics-card footer-metrics">
+        <div class="group-head">
+          <h3>仿真指标</h3>
+        </div>
+        <ul id="metrics-list">
+          <li>平均响应时延：<span id="metric-avg-response">0.0s</span></li>
+          <li>任务完成率：<span id="metric-completion-rate">0%</span></li>
+          <li>峰值队列长度：<span id="metric-peak-queue">0</span></li>
+          <li>平均等待时长：<span id="metric-avg-wait">0.0s</span></li>
+        </ul>
+      </section>
     </footer>
   </div>
 
