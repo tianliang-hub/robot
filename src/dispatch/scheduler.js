@@ -855,10 +855,20 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     await moveToTableSide(waiterId, task.tableId, getMoveDuration(1100), "收餐");
     await waitMs(300);
     const artifacts = ensureTableArtifacts(task.tableId);
+    const tableCenter = SCENE_POINTS.tables?.[String(task.tableId)];
+    if (tableCenter) {
+      sceneManager.setAnchorFacing?.(waiterId, tableCenter);
+      await waitMs(350);
+    }
+    if (artifacts.foodPlate) {
+      sceneManager.hideTableFoodOnly?.(task.tableId);
+    }
     const hasBottle = !!artifacts.waterBottle;
     const hasPlate = !!artifacts.emptyPlate || !!artifacts.foodPlate;
     if (hasBottle || hasPlate) {
-      const carryType = hasPlate ? "food" : "water";
+      let carryType = "water";
+      if (hasPlate && hasBottle) carryType = "cleanupBottleOnPlate";
+      else if (hasPlate) carryType = "cleanupEmpty";
       sceneManager.showWaiterProp?.(waiterId, carryType);
       sceneManager.setTableItem?.(task.tableId, "waterBottle", false);
       sceneManager.setTableItem?.(task.tableId, "foodPlate", false);

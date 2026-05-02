@@ -265,18 +265,26 @@ export function createSceneManager({ logger }) {
       { url: "/models/props/plate.glb", scale: 0.21, posY: 0 },
       { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.18, posY: 0.01 }
     ],
+    // 送水：托盘 + 瓶叠在盘面上（与送餐同一 slot 追踪）
     water: [
-      { url: BOTTLE_MODEL_URL, scale: BOTTLE_STYLE_SCALE*1.5, posY: BOTTLE_STYLE_POS_Y }
+      { url: "/models/props/plate.glb", scale: 0.21, posY: 0 },
+      { url: BOTTLE_MODEL_URL, scale: BOTTLE_STYLE_SCALE * 0.24, posY: 0.03 }
+    ],
+    // 收餐：无瓶仅盘 / 有瓶则瓶叠在盘上方（与 scheduler carryType 一致）
+    cleanupEmpty: [{ url: "/models/props/plate.glb", scale: 0.13, posY: 0 }],
+    cleanupBottleOnPlate: [
+      { url: "/models/props/plate.glb", scale: 0.13, posY: 0 },
+      { url: BOTTLE_MODEL_URL, scale: BOTTLE_STYLE_SCALE * 0.24, posY: 0.03 }
     ]
   };
   const TABLE_ITEM_DEFS = {
     // 手持与桌面统一同一套瓶子样式参数
     waterBottle: [{ url: BOTTLE_MODEL_URL, scale: BOTTLE_STYLE_SCALE, posY: BOTTLE_STYLE_POS_Y }],
     foodPlate: [
-      { url: "/models/props/plate.glb", scale: 0.55, posY: 0.655 },
-      { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.45, posY: 0.655 }
+      { url: "/models/props/plate.glb", scale: 0.6, posY: 0.655 },
+      { url: "/models/food/ebi_nigiri_prop.glb", scale: 0.55, posY: 0.655 }
     ],
-    emptyPlate: [{ url: "/models/props/plate.glb", scale: 0.55, posY: 0.65 }]
+    emptyPlate: [{ url: "/models/props/plate.glb", scale: 0.65, posY: 0.65 }]
   };
   const TABLE_ITEM_LAYOUT = {
     waterBottle: { x: 0.22, y: 0.78, z: -0.05, rotY: Math.PI * 0.12 },
@@ -284,10 +292,10 @@ export function createSceneManager({ logger }) {
     emptyPlate: { x: -0.12, y: 0.77, z: 0.08, rotY: Math.PI * 0.25 }
   };
 
-  /** 手骨世界坐标转入 slot 局部后的平移修正（手持水瓶/托盘手感主要调这里） */
-  const HAND_TRACK_BONE_OFFSET = new THREE.Vector3(-0.2, -0.5, -0.2);
-  /** 水瓶相对手骨的额外握持四元数补偿 */
-  const WATER_HAND_GRIP_EULER = new THREE.Euler(0, 0, Math.PI / 2);
+  /** 手骨世界坐标转入 slot 局部后的平移修正（送水/送餐托盘手感主要调这里） */
+  const HAND_TRACK_BONE_OFFSET = new THREE.Vector3(0, -0.8, -0.8);
+  /** 收餐道具相对服务员锚点的局部位置（胸高、身前；挂 anchor 以随转身） */
+  const CLEANUP_CARRY_ANCHOR_OFFSET = new THREE.Vector3(0, 0.9, 0.32);
 
   /** 冰箱内 Kit 酒瓶（Environment_Bottle），局部坐标相对 Environment_Fridge 柜体 */
   const FRIDGE_INTERIOR_WINE_SCALE = 0.55;
@@ -528,6 +536,79 @@ export function createSceneManager({ logger }) {
     }
   }
 
+  /** 归一化骨骼名（小写、去符号）供子串匹配；Mixamo 等命名与旧版 exact key 都能命中 */
+  function normalizeBoneKey(name) {
+    return String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  /**
+   * 右手持物骨骼：优先手掌/腕/指骨，再前臂（含 mixamorigrightforearm、LowerArm_R 等）
+   * 同时收集 SkinnedMesh.skeleton.bones，避免骨骼未挂在 scene 子树上时匹配不到。
+   */
+  function pickWaiterRightHandBone(model) {
+    const seen = new Set();
+    const list = [];
+    function addBone(bone) {
+      if (!bone || seen.has(bone.uuid)) return;
+      seen.add(bone.uuid);
+      list.push({ bone, key: normalizeBoneKey(bone.name) });
+    }
+    model.traverse((child) => {
+      if (child.isBone || child.type === "Bone") addBone(child);
+      const bones = child.isSkinnedMesh && child.skeleton && child.skeleton.bones;
+      if (bones) bones.forEach(addBone);
+    });
+    // 顺序：整手/腕 → 前臂（掌心无独立骨时用前臂更稳）→ 掌指近端 → 末节指骨（最后兜底）
+    const patterns = [
+      "mixamorigrighthand",
+      "jbiprhand",
+      "biprhand",
+      "righthand",
+      "handr",
+      "rightwrist",
+      "wristr",
+      "mixamorigrightwrist",
+      "mixamorigrightforearm",
+      "rightforearm",
+      "forearmr",
+      "lowerarmr",
+      "lowerrarmr",
+      "rightlowerarm",
+      "thumbproximalr",
+      "thumbmetacarpalr",
+      "indexproximalr",
+      "middleproximalr",
+      "ringproximalr",
+      "littleproximalr",
+      "thumb1r",
+      "index1r",
+      "middle1r",
+      "ring1r",
+      "pinky1r"
+    ];
+    for (const pat of patterns) {
+      const p = normalizeBoneKey(pat);
+      for (const { bone, key } of list) {
+        if (!key) continue;
+        if (p === "handr") {
+          if (key === "handr" || key.endsWith("handr")) return bone;
+          continue;
+        }
+        if (key.includes(p)) return bone;
+      }
+    }
+    for (const { bone, key } of list) {
+      if (!key) continue;
+      if (key.endsWith("rhand") && !key.includes("lefthand")) return bone;
+    }
+    const boneMap = new Map(list.map(({ bone, key }) => [key, bone]));
+    const legacyKeys = ["lowerarmr", "middle1r", "index1r", "upperarmr", "lowerarml", "middle1l"];
+    for (const kw of legacyKeys) {
+      if (boneMap.has(kw)) return boneMap.get(kw);
+    }
+    return null;
+  }
+
   function registerActorRig(anchorKey, model, clips) {
     const mixer = new THREE.AnimationMixer(model);
     animationMixers.push(mixer);
@@ -536,25 +617,15 @@ export function createSceneManager({ logger }) {
       actions.set(clip.name.toLowerCase(), mixer.clipAction(clip));
     });
 
-    // 扫描所有骨骼节点，优先匹配右手前謄骨 LowerArmR
     const boneNames = [];
-    let handBone = null;
-    // 按优先级顺序：R先于L，即右手优先
-    const handKeywords = ['lowerarmr', 'middle1r', 'index1r', 'upperarmr', 'lowerarml', 'middle1l'];
-    // 先按骨骼建索引
-    const boneMap = new Map();
     model.traverse((child) => {
-      if (!child.isBone && child.type !== 'Bone') return;
+      if (!child.isBone && child.type !== "Bone") return;
       boneNames.push(child.name);
-      boneMap.set(child.name.toLowerCase().replace(/[^a-z0-9]/g, ''), child);
     });
-    // 按关键词顺序匹配，优先匹到 R
-    for (const kw of handKeywords) {
-      if (boneMap.has(kw)) { handBone = boneMap.get(kw); break; }
-    }
+    const handBone = pickWaiterRightHandBone(model);
     if (boneNames.length > 0) {
-      logger.log(`[骨骼] ${anchorKey} 共 ${boneNames.length} 个骨：${boneNames.join(', ')}`);
-      logger.log(`[骨骼] ${anchorKey} 手骨：${handBone ? handBone.name : '未自动匹配'}`);
+      logger.log(`[骨骼] ${anchorKey} 共 ${boneNames.length} 个骨：${boneNames.join(", ")}`);
+      logger.log(`[骨骼] ${anchorKey} 手骨：${handBone ? handBone.name : "未自动匹配"}`);
     }
 
     actorRigs.set(anchorKey, {
@@ -689,8 +760,11 @@ export function createSceneManager({ logger }) {
             mesh.scale.setScalar(part.scale);
             mesh.position.y = part.posY ?? 0;
 
-            // 非水瓶道具使用增强渲染，水瓶保持与桌面一致的原始材质观感
-            const useEnhancedCarryRender = propType !== "water";
+            const useEnhancedCarryRender = true;
+            const carryRenderOrder =
+              propType === "cleanupBottleOnPlate" || propType === "water"
+                ? (part.url === BOTTLE_MODEL_URL ? 1000 : 998)
+                : 999;
             mesh.traverse((child) => {
               if (!child.isMesh) return;
               if (useEnhancedCarryRender && child.material) {
@@ -704,7 +778,7 @@ export function createSceneManager({ logger }) {
                   }
                 });
               }
-              child.renderOrder = useEnhancedCarryRender ? 999 : 0;
+              child.renderOrder = carryRenderOrder;
               child.castShadow = true;
               child.receiveShadow = true;
               child.visible = true;
@@ -715,8 +789,7 @@ export function createSceneManager({ logger }) {
             logger.log(`[道具] ${propType} 部件 ${part.url} 加载失败: ${_err}`);
           }
         }
-        // 水瓶按桌面样式保持原始比例，其它道具保留原补偿
-        group.scale.setScalar(propType === "water" ? 1 : 5);
+        group.scale.setScalar(5);
         propCache.set(propType, group);
         logger.log(`[道具] ${propType} 预加载完成，共 ${loaded} 个真实模型部件`);
       })
@@ -753,26 +826,42 @@ export function createSceneManager({ logger }) {
     if (propGroup.parent) propGroup.parent.remove(propGroup);
 
     const rig = actorRigs.get(waiterId);
-    const handBone = rig?.handBone;
+    // 每次显示时用当前模型重选右手骨（含 skeleton.bones），避免 rig 缓存时骨架未就绪
+    const handBone = rig?.model ? pickWaiterRightHandBone(rig.model) : rig?.handBone;
+    const floatInFront =
+      propType === "cleanupEmpty" || propType === "cleanupBottleOnPlate";
 
-    if (handBone) {
-      // 不直接作为骨骼的子节点，以防继承旋转导致晃动
-      // 而是作为 slot 的子节点，并在 animate 中追踪骨骼位置
+    if (handBone && !floatInFront) {
+      // 送水 / 送餐：slot + 每帧手骨位置追踪（与托盘逻辑一致，避免道具继承骨骼旋转乱晃）
       entry.slot.add(propGroup);
+      propGroup.position.set(0, 0, 0);
       propGroup.rotation.set(0, 0, 0);
       entry.propParent = entry.slot;
       entry.trackingBone = handBone;
+      entry.slot.visible = true;
       logger.log(`[道具] ${waiterId} 追踪手骨挂载: ${propType} -> ${handBone.name}`);
+    } else if (floatInFront) {
+      const anchor = anchors[waiterId];
+      if (!anchor) {
+        console.warn(`[道具] 无锚点 waiterId=${waiterId}`);
+        return;
+      }
+      anchor.add(propGroup);
+      propGroup.position.copy(CLEANUP_CARRY_ANCHOR_OFFSET);
+      propGroup.quaternion.identity();
+      entry.propParent = anchor;
+      entry.trackingBone = null;
+      entry.slot.visible = false;
+      logger.log(`[道具] ${waiterId} 收餐身前悬浮(锚点): ${propType}`);
     } else {
       entry.slot.add(propGroup);
       propGroup.rotation.set(0, 0, 0);
-      entry.slot.visible = true;
-      entry.propParent = entry.slot;
+      propGroup.position.set(0, 0, 0);
       entry.trackingBone = null;
+      entry.propParent = entry.slot;
+      entry.slot.visible = true;
       logger.log(`[道具] ${waiterId} slot 挂载: ${propType}（无手骨）`);
     }
-
-    entry.slot.visible = true;
 
     propGroup.visible = true;
     propGroup.traverse((c) => { if (c !== propGroup) c.visible = true; });
@@ -836,6 +925,7 @@ export function createSceneManager({ logger }) {
         new THREE.MeshStandardMaterial({ color: 0xffb36b, roughness: 0.6, metalness: 0.05 })
       );
       food.position.set(0.02, 0.035, 0);
+      food.userData.tablePart = "food";
       group.add(food);
     }
     return group;
@@ -846,12 +936,18 @@ export function createSceneManager({ logger }) {
     if (!defs || defs.length === 0) return createFallbackTableItem(itemType);
     const group = new THREE.Group();
     let loaded = 0;
-    for (const part of defs) {
+    for (let i = 0; i < defs.length; i += 1) {
+      const part = defs[i];
       try {
         const gltf = await loadGLB(part.url);
         const mesh = gltf.scene.clone(true);
         mesh.position.y = part.posY || 0;
         mesh.scale.setScalar(part.scale || 1);
+        if (itemType === "foodPlate" && i === 1) {
+          mesh.traverse((node) => {
+            node.userData.tablePart = "food";
+          });
+        }
         mesh.traverse((node) => {
           if (!node.isMesh) return;
           node.castShadow = true;
@@ -864,6 +960,15 @@ export function createSceneManager({ logger }) {
       }
     }
     return loaded > 0 ? group : createFallbackTableItem(itemType);
+  }
+
+  function hideTableFoodOnly(tableId) {
+    const key = makeTableItemKey(String(tableId), "foodPlate");
+    const item = tableItemInstances.get(key);
+    if (!item) return;
+    item.traverse((node) => {
+      if (node.userData?.tablePart === "food") node.visible = false;
+    });
   }
 
   async function ensureTableItemVisible(tableId, itemType) {
@@ -1453,35 +1558,15 @@ export function createSceneManager({ logger }) {
       }
     });
 
-    // 道具位置平滑追踪
+    // 道具位置平滑追踪（送水/送餐 trackingBone + slot）；收餐挂锚点、无 trackingBone
     waiterPropSlots.forEach((entry) => {
       if (entry.current && entry.trackingBone) {
-        // 获取手骨的世界坐标
         const boneWorldPos = new THREE.Vector3();
         entry.trackingBone.getWorldPosition(boneWorldPos);
-
-        // 将世界坐标转为 slot 的局部坐标
         entry.slot.worldToLocal(boneWorldPos);
-
         boneWorldPos.add(HAND_TRACK_BONE_OFFSET);
-
-        // 平滑插值，消除骨骼动画带来的高频抖动
         entry.current.position.lerp(boneWorldPos, 1);
-        if (entry.currentType === "water") {
-          // 水瓶跟随手臂姿态：把手骨世界旋转转换为 slot 局部旋转后再平滑插值
-          const boneWorldQuat = new THREE.Quaternion();
-          const slotWorldQuat = new THREE.Quaternion();
-          const localTargetQuat = new THREE.Quaternion();
-          entry.trackingBone.getWorldQuaternion(boneWorldQuat);
-          entry.slot.getWorldQuaternion(slotWorldQuat);
-          localTargetQuat.copy(slotWorldQuat).invert().multiply(boneWorldQuat);
-          const gripOffset = new THREE.Quaternion().setFromEuler(WATER_HAND_GRIP_EULER);
-          localTargetQuat.multiply(gripOffset);
-          entry.current.quaternion.slerp(localTargetQuat, 0.18);
-        } else {
-          // 托盘食物仍保持近水平，避免倾斜
-          entry.current.rotation.set(0, 0, 0);
-        }
+        entry.current.rotation.set(0, 0, 0);
       }
     });
 
@@ -1546,6 +1631,7 @@ export function createSceneManager({ logger }) {
     },
     showWaiterProp,
     hideWaiterProp,
+    hideTableFoodOnly,
     setTableItem,
     clearTableItems,
     setFridgeDoorOpen,
