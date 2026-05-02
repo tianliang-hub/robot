@@ -79,9 +79,10 @@ export function createSceneManager({ logger }) {
   let startedAt = performance.now();
 
   const scene = new THREE.Scene();
-  /* 暖色餐厅环境：深褐木色墙感，非冷灰 */
-  scene.background = new THREE.Color(0xeeeaca);
-  scene.fog = new THREE.Fog(0x4a3f36, 28, 85);
+  /* 建模环境：天空与雾同色，弱化地平/板边硬线 */
+  const SKY_AMBIENT = 0xefe6c8;
+  scene.background = new THREE.Color(SKY_AMBIENT);
+  scene.fog = new THREE.Fog(SKY_AMBIENT, 24, 92);
 
   const camera = new THREE.PerspectiveCamera(
     60,
@@ -115,31 +116,46 @@ export function createSceneManager({ logger }) {
   controls.keyPanSpeed = 35;
   controls.target.set(0, 0, 0);
 
-  const visualGridSize = Math.max(NAV_GRID.width, NAV_GRID.depth);
-  const visualGridDivisions = Math.max(24, Math.round(visualGridSize / Math.max(0.4, NAV_GRID.cellSize)));
-  const gridHelper = new THREE.GridHelper(visualGridSize, visualGridDivisions, 0xc4a882, 0x8b7355);
-  gridHelper.position.x = NAV_GRID.origin.x;
-  gridHelper.position.z = NAV_GRID.origin.z;
-  const gridMaterials = Array.isArray(gridHelper.material) ? gridHelper.material : [gridHelper.material];
-  gridMaterials.forEach((material) => {
-    material.transparent = true;
-    material.opacity = 0.1;
-    material.depthWrite = false;
-  });
-  scene.add(gridHelper);
+  const navWorldSpan = Math.max(NAV_GRID.width, NAV_GRID.depth) * NAV_GRID.cellSize;
+  const gridFineDivisions = Math.max(24, Math.round(navWorldSpan / Math.max(0.35, NAV_GRID.cellSize)));
+  const gridMajorDivisions = Math.max(2, Math.round(gridFineDivisions / 3));
+
+  function applyGridMaterials(grid, opacity) {
+    const mats = Array.isArray(grid.material) ? grid.material : [grid.material];
+    mats.forEach((material) => {
+      material.transparent = true;
+      material.opacity = opacity;
+      material.depthWrite = false;
+    });
+  }
+
+  const gridFine = new THREE.GridHelper(navWorldSpan, gridFineDivisions, 0xc4c4c4, 0xb8b8b8);
+  gridFine.position.y = 0.001;
+  applyGridMaterials(gridFine, 0.38);
+
+  const gridMajor = new THREE.GridHelper(navWorldSpan, gridMajorDivisions, 0x888888, 0x888888);
+  gridMajor.position.y = 0.002;
+  applyGridMaterials(gridMajor, 0.62);
+
+  const groundGridGroup = new THREE.Group();
+  groundGridGroup.name = "GroundGrid";
+  groundGridGroup.add(gridFine);
+  groundGridGroup.add(gridMajor);
+  groundGridGroup.position.set(NAV_GRID.origin.x, 0, NAV_GRID.origin.z);
 
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(50, 50),
+    new THREE.PlaneGeometry(40, 40),
     new THREE.MeshStandardMaterial({
-      color: 0xeeeaca,
-      roughness: 0.88,
-      metalness: 0.04
+      color: 0xfffff0,
+      roughness: 0.92,
+      metalness: 0.02
     })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0;
   floor.receiveShadow = true;
   scene.add(floor);
+  scene.add(groundGridGroup);
   const obstacleMarkerGroup = new THREE.Group();
   scene.add(obstacleMarkerGroup);
 
@@ -1491,7 +1507,7 @@ export function createSceneManager({ logger }) {
     setFridgeBottleStockCount,
     takeOneFridgeStockBottle,
     setGridVisible(visible) {
-      gridHelper.visible = Boolean(visible);
+      groundGridGroup.visible = Boolean(visible);
     },
     setObstacleEditMode(enabled) {
       obstacleEditMode = Boolean(enabled);
