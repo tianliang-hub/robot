@@ -15,8 +15,12 @@ import {
   WAITER_TURN_SPEED
 } from "../config/appConfig.js";
 
-const KIT_ENV_CAN_FRIDGE_URL = new URL(
-  "../../Sushi Restaurant Kit/Environment/glTF/Environment_CanFridge.gltf",
+const KIT_ENV_FRIDGE_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_Fridge.gltf",
+  import.meta.url
+).href;
+const KIT_ENV_WINE_BOTTLE_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_Bottle.gltf",
   import.meta.url
 ).href;
 const KIT_WALL_SHOJI_INTERIOR_URL = new URL(
@@ -49,7 +53,7 @@ const KIT_ENV_ARCH_URL = new URL(
 ).href;
 
 const PREFERRED_STATIC_MODEL_URLS = {
-  fridge: KIT_ENV_CAN_FRIDGE_URL,
+  fridge: KIT_ENV_FRIDGE_URL,
   wall_house_left_1: KIT_WALL_SHOJI_INTERIOR_URL,
   wall_house_left_2: KIT_WALL_SHOJI_INTERIOR_URL,
   wall_house_left_3: KIT_WALL_SHOJI_INTERIOR_URL,
@@ -177,7 +181,7 @@ export function createSceneManager({ logger }) {
   let fridgeDoorClosedY = null;
   let fridgeDoorOpenSign = -1;
   let fridgeDoorTween = null;
-  /** 冰箱内饰水瓶（仅 Environment_Fridge 空壳时克隆）；CanFridge 自带罐装几何，不叠加 bottle */
+  /** 冰箱内饰酒瓶（Environment_Fridge 时挂 Kit Environment_Bottle）；CanFridge 则跳过 */
   const fridgeStockBottles = [];
   let fridgeStockVisibleCount = 0;
 
@@ -224,14 +228,21 @@ export function createSceneManager({ logger }) {
   /** 水瓶相对手骨的额外握持四元数补偿 */
   const WATER_HAND_GRIP_EULER = new THREE.Euler(0, 0, Math.PI / 2);
 
-  /** 冰箱内展示水瓶：与桌面同款缩放，局部坐标相对 Environment_Fridge 柜体（CanFridge 不用） */
-  const FRIDGE_INTERIOR_BOTTLE_SCALE = BOTTLE_STYLE_SCALE * 0.85;
+  /** 冰箱内 Kit 酒瓶（Environment_Bottle），局部坐标相对 Environment_Fridge 柜体 */
+  const FRIDGE_INTERIOR_WINE_SCALE = 0.55;
   const FRIDGE_INTERIOR_STOCK_SLOTS = [
-    { x: 0.92, y: 1.02, z: 0.42, rotY: Math.PI * 0.5 },
-    { x: 0.92, y: 1.02, z: 0.08, rotY: Math.PI * 0.5 },
-    { x: 0.92, y: 1.02, z: -0.28, rotY: Math.PI * 0.5 },
-    { x: 1.12, y: 1.02, z: 0.25, rotY: Math.PI * 0.5 },
-    { x: 1.12, y: 1.02, z: -0.12, rotY: Math.PI * 0.5 }
+    { x: -0.65, y: 1.9, z: -0.3, rotY: Math.PI * 0.48 },
+    { x: 0.65, y: 1.9, z: -0.3, rotY: Math.PI * 0.48 },
+    { x: 0, y: 1.9, z: -0.3, rotY: Math.PI * 0.48 },
+    { x: -0.65, y: 3.3, z: -0.3, rotY: Math.PI * 0.48 },
+    { x: 0.65, y: 3.3, z: -0.3, rotY: Math.PI * 0.48 },
+    { x: 0, y: 3.3, z: -0.3, rotY: Math.PI * 0.48 },
+    { x: -0.5, y: 1.9, z: 0.3, rotY: Math.PI * 0.48 },
+    { x: 0.5, y: 1.9, z: 0.3, rotY: Math.PI * 0.48 },
+    { x: 0, y: 1.9, z: 0.3, rotY: Math.PI * 0.48 },
+    { x: -0.5, y: 3.3, z: 0.3, rotY: Math.PI * 0.48 },
+    { x: 0.5, y: 3.3, z: 0.3, rotY: Math.PI * 0.48 },
+    { x: 0, y: 3.3, z: 0.3, rotY: Math.PI * 0.48 }
   ];
 
   // 道具 slot 挂载在锚点上的局部偏移（相对锚点原点，Y≈手高）
@@ -331,7 +342,7 @@ export function createSceneManager({ logger }) {
       if (node.name === "Environment_CanFridge") hasCanFridgeBody = true;
     });
     if (hasCanFridgeBody) {
-      logger.log("[冰箱] Environment_CanFridge 已含罐装内饰，跳过克隆水瓶");
+      logger.log("[冰箱] Environment_CanFridge 已含内置陈列，跳过克隆酒瓶");
       return;
     }
 
@@ -340,15 +351,15 @@ export function createSceneManager({ logger }) {
       if (node.name === "Environment_Fridge") bodyNode = node;
     });
 
-    const gltf = await loadGLB(BOTTLE_MODEL_URL);
+    const gltf = await loadGLB(KIT_ENV_WINE_BOTTLE_URL);
     const stockRoot = new THREE.Group();
     stockRoot.name = "FridgeInteriorStock";
 
     for (const slot of FRIDGE_INTERIOR_STOCK_SLOTS) {
       const wrap = new THREE.Group();
       const clone = gltf.scene.clone(true);
-      clone.scale.setScalar(FRIDGE_INTERIOR_BOTTLE_SCALE);
-      clone.position.y = BOTTLE_STYLE_POS_Y;
+      clone.scale.setScalar(FRIDGE_INTERIOR_WINE_SCALE);
+      clone.position.y = 0;
       clone.traverse((child) => {
         if (!child.isMesh) return;
         child.castShadow = true;
@@ -363,7 +374,7 @@ export function createSceneManager({ logger }) {
 
     bodyNode.add(stockRoot);
     setFridgeBottleStockCount(fridgeStockBottles.length);
-    logger.log(`[冰箱] 内饰水瓶 ${fridgeStockBottles.length} 个`);
+    logger.log(`[冰箱] 内饰酒瓶 ${fridgeStockBottles.length} 个`);
   }
 
   async function attachActorModel(plan) {
