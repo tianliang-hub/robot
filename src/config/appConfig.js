@@ -189,6 +189,9 @@ export const MODEL_QUALITY = {
   low: { shadowMap: 1024, maxCastDistance: 8 }
 };
 
+/** 厨师 glTF 子节点名（小写匹配子串）加载后设为不可见，例如去掉手持刀保留锅/锅铲 */
+export const CHEF_HIDDEN_MESH_NAME_SUBSTRINGS = ["knife"];
+
 export const ACTOR_MODEL_PLAN = [
   {
     name: "锚点-熊猫厨师",
@@ -284,6 +287,26 @@ export const STATIC_MODEL_PLAN = [
   { name: "wall_redwood_left", url: "/models/environment/wall_redwood.glb", pos: [-2.2, 2.3, -11.5], scale: 0.14, stage: 2, importance: "low" },
   { name: "wall_redwood_right", url: "/models/environment/wall_redwood.glb", pos: [2.8, 2.3, -11.5], scale: 0.14, stage: 2, importance: "low" },
   { name: "oven", url: "/models/environment/oven.glb", pos: [-6.9, 0, -9.5], scale: 1, rotationY: Math.PI / 2, stage: 1, importance: "high" },
+  {
+    name: "decor_pot_on_oven",
+    url: "/models/props/plate.glb",
+    pos: [-6.9, 2.16, -9.5],
+    scale: 1.12,
+    rotationY: Math.PI / 2,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_bottles_on_recycle",
+    url: "/models/props/plate.glb",
+    pos: [-7, 0.9, -4.5],
+    scale: 1,
+    rotationY:0,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
   { name: "fridge", url: "/models/environment/fridge.glb", pos: [-7, 0, -1.5], scale: 0.9, rotationY: FRIDGE_ROTATION_Y, stage: 1, importance: "high" },
   { name: "wall_shoji_1", url: "/models/environment/wall_shoji.glb", pos: [-6, 0, -10], scale: 1.0, rotationY: 0, stage: 2, importance: "low" },
   { name: "wall_shoji_2", url: "/models/environment/wall_shoji.glb", pos: [-2, 0, -10], scale: 1.0, rotationY: 0, stage: 2, importance: "low" },
@@ -295,6 +318,106 @@ export const STATIC_MODEL_PLAN = [
   { name: "wall_house_left_4", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, 1], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
   { name: "wall_house_left_5", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, 5], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
   { name: "wall_house_left_6", url: "/models/environment/wall_shoji.glb", pos: [-9, 0, 9], scale: 1.0, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
+  {
+    name: "decor_wall_light_1",
+    url: "/models/props/plate.glb",
+    pos: [-8.92, 3.42, -5],
+    scale: 1,
+    rotationY: Math.PI / 2,
+    stage: 2,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_wall_light_2",
+    url: "/models/props/plate.glb",
+    pos: [-8.92, 3.42, 0],
+    scale: 1,
+    rotationY: Math.PI / 2,
+    stage: 2,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_wall_light_3",
+    url: "/models/props/plate.glb",
+    pos: [-8.92, 3.42, 5],
+    scale: 1,
+    rotationY: Math.PI / 2,
+    stage: 2,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_food_udon",
+    url: "/models/food/ebi_nigiri_prop.glb",
+    pos: [2.2, 1.98, -5.95],
+    scale: 1.2,
+    rotationY: Math.PI * 0.15,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_food_onigiri",
+    url: "/models/food/ebi_nigiri_prop.glb",
+    pos: [1.25, 1.68, -5.95],
+    scale: 1.42,
+    rotationY: -Math.PI * 0.2,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_food_tamago",
+    url: "/models/food/ebi_nigiri_prop.glb",
+    pos: [0.65, 1.68, -5.95],
+    scale: 1.4,
+    rotationY: 0,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_cutting_board_transfer",
+    url: "/models/props/plate.glb",
+    pos: [-4, 2, -6.92],
+    scale: 1.3,
+    rotationY: - Math.PI,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_right_counter_light",
+    url: "/models/props/plate.glb",
+    pos: [7.3, 0, -6.92],
+    scale: 1,
+    rotationY: Math.PI * 0.5,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_right_counter_bottle",
+    url: "/models/props/plate.glb",
+    pos: [1.25, 0.98, -6.9],
+    scale: 0.1,
+    rotationY: Math.PI / 2,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
+  {
+    name: "decor_right_floor_plant",
+    url: "/models/props/plate.glb",
+    pos: [7.25, 1.4, -6.9],
+    scale: 0.5,
+    rotationY: Math.PI * 0.35,
+    stage: 1,
+    importance: "low",
+    navObstacle: false
+  },
   { name: "顾客A", url: "/models/customers/customer_a.glb", pos: [-6.6, 0, 9.5], scale: 0.8, rotationY: Math.PI / 2, stage: 2, importance: "medium" },
   { name: "顾客B", url: "/models/customers/customer_b.glb", pos: [-3.8, 0, 9.5], scale: 0.8, rotationY: -Math.PI / 2, stage: 2, importance: "medium" },
   { name: "顾客C", url: "/models/customers/customer_c.glb", pos: [6.8, 0, 3.1], scale: 0.8, rotationY: -Math.PI / 2, stage: 2, importance: "medium" }

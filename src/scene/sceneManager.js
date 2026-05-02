@@ -35,10 +35,6 @@ const KIT_DECOR_LIGHT_URL = new URL(
   "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_Light.gltf",
   import.meta.url
 ).href;
-const KIT_DECOR_PLANT1_URL = new URL(
-  "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_Plant1.gltf",
-  import.meta.url
-).href;
 const KIT_DECOR_PLANT2_URL = new URL(
   "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_Plant2.gltf",
   import.meta.url
@@ -47,13 +43,62 @@ const KIT_DECOR_SIGN_URL = new URL(
   "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_Sign.gltf",
   import.meta.url
 ).href;
+const KIT_DECOR_SAKURA_TREE_URL = new URL(
+  "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_SakuraTree.gltf",
+  import.meta.url
+).href;
 const KIT_ENV_ARCH_URL = new URL(
   "../../Sushi Restaurant Kit/Environment/glTF/Environment_Arch.gltf",
+  import.meta.url
+).href;
+const KIT_ENV_OVEN_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_Oven.gltf",
+  import.meta.url
+).href;
+const KIT_ENV_POT_1_FILLED_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_Pot_1_Filled.gltf",
+  import.meta.url
+).href;
+const KIT_ENV_BOTTLES_CRATE_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_Bottles.gltf",
+  import.meta.url
+).href;
+const KIT_ENV_CUTTING_TABLE_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_CuttingTable.gltf",
+  import.meta.url
+).href;
+const KIT_DECO_WALL_LIGHT_URL = new URL(
+  "../../Sushi Restaurant Kit/Decoration/glTF/Decoration_WallLight.gltf",
+  import.meta.url
+).href;
+const KIT_FOOD_UDON_URL = new URL(
+  "../../Sushi Restaurant Kit/Food/glTF/Food_Udon.gltf",
+  import.meta.url
+).href;
+const KIT_FOOD_ONIGIRI_URL = new URL(
+  "../../Sushi Restaurant Kit/Food/glTF/Food_Onigiri.gltf",
+  import.meta.url
+).href;
+const KIT_FOOD_TAMAGO_NIGIRI_URL = new URL(
+  "../../Sushi Restaurant Kit/Food/glTF/Food_TamagoNigiri.gltf",
   import.meta.url
 ).href;
 
 const PREFERRED_STATIC_MODEL_URLS = {
   fridge: KIT_ENV_FRIDGE_URL,
+  oven: KIT_ENV_OVEN_URL,
+  decor_pot_on_oven: KIT_ENV_POT_1_FILLED_URL,
+  decor_bottles_on_recycle: KIT_ENV_BOTTLES_CRATE_URL,
+  decor_wall_light_1: KIT_DECO_WALL_LIGHT_URL,
+  decor_wall_light_2: KIT_DECO_WALL_LIGHT_URL,
+  decor_wall_light_3: KIT_DECO_WALL_LIGHT_URL,
+  decor_food_udon: KIT_FOOD_UDON_URL,
+  decor_food_onigiri: KIT_FOOD_ONIGIRI_URL,
+  decor_food_tamago: KIT_FOOD_TAMAGO_NIGIRI_URL,
+  decor_cutting_board_transfer: KIT_ENV_CUTTING_TABLE_URL,
+  decor_right_counter_light: KIT_DECOR_LIGHT_URL,
+  decor_right_floor_plant: KIT_DECOR_SAKURA_TREE_URL,
+  decor_right_counter_bottle: KIT_ENV_WINE_BOTTLE_URL,
   wall_house_left_1: KIT_WALL_SHOJI_INTERIOR_URL,
   wall_house_left_2: KIT_WALL_SHOJI_INTERIOR_URL,
   wall_house_left_3: KIT_WALL_SHOJI_INTERIOR_URL,
