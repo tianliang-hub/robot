@@ -809,11 +809,14 @@ export function createScheduler({ store, sceneManager, logger, metrics, advisor 
     }
     await waitMs(600); // 等待冰箱打开动画
 
-    // 取水完成后：显示水瓶道具
+    // 取水完成后：显示水瓶道具，并减少冰箱内可见库存
     if (typeof sceneManager.showWaiterProp === 'function') {
       sceneManager.showWaiterProp(waiterId, 'water');
     } else {
       logger.log(`[道具错误] showWaiterProp 不存在! 已导出: ${Object.keys(sceneManager).join(', ')}`);
+    }
+    if (typeof sceneManager.takeOneFridgeStockBottle === "function") {
+      sceneManager.takeOneFridgeStockBottle();
     }
 
     await waitMs(300);

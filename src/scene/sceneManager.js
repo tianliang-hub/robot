@@ -15,8 +15,8 @@ import {
   WAITER_TURN_SPEED
 } from "../config/appConfig.js";
 
-const KIT_ENV_FRIDGE_URL = new URL(
-  "../../Sushi Restaurant Kit/Environment/glTF/Environment_Fridge.gltf",
+const KIT_ENV_CAN_FRIDGE_URL = new URL(
+  "../../Sushi Restaurant Kit/Environment/glTF/Environment_CanFridge.gltf",
   import.meta.url
 ).href;
 const KIT_WALL_SHOJI_INTERIOR_URL = new URL(
@@ -49,7 +49,7 @@ const KIT_ENV_ARCH_URL = new URL(
 ).href;
 
 const PREFERRED_STATIC_MODEL_URLS = {
-  fridge: KIT_ENV_FRIDGE_URL,
+  fridge: KIT_ENV_CAN_FRIDGE_URL,
   wall_house_left_1: KIT_WALL_SHOJI_INTERIOR_URL,
   wall_house_left_2: KIT_WALL_SHOJI_INTERIOR_URL,
   wall_house_left_3: KIT_WALL_SHOJI_INTERIOR_URL,
@@ -177,6 +177,9 @@ export function createSceneManager({ logger }) {
   let fridgeDoorClosedY = null;
   let fridgeDoorOpenSign = -1;
   let fridgeDoorTween = null;
+  /** 冰箱内饰水瓶（仅 Environment_Fridge 空壳时克隆）；CanFridge 自带罐装几何，不叠加 bottle */
+  const fridgeStockBottles = [];
+  let fridgeStockVisibleCount = 0;
 
   // ── 道具系统 ──
   // propCache: propType -> THREE.Group (已加载好，常驻 scene 外，随时 reparent)
@@ -215,6 +218,21 @@ export function createSceneManager({ logger }) {
     foodPlate: { x: -0.12, y: 0.77, z: 0.08, rotY: Math.PI * 0.4 },
     emptyPlate: { x: -0.12, y: 0.77, z: 0.08, rotY: Math.PI * 0.25 }
   };
+
+  /** 手骨世界坐标转入 slot 局部后的平移修正（手持水瓶/托盘手感主要调这里） */
+  const HAND_TRACK_BONE_OFFSET = new THREE.Vector3(-0.2, -0.5, -0.2);
+  /** 水瓶相对手骨的额外握持四元数补偿 */
+  const WATER_HAND_GRIP_EULER = new THREE.Euler(0, 0, Math.PI / 2);
+
+  /** 冰箱内展示水瓶：与桌面同款缩放，局部坐标相对 Environment_Fridge 柜体（CanFridge 不用） */
+  const FRIDGE_INTERIOR_BOTTLE_SCALE = BOTTLE_STYLE_SCALE * 0.85;
+  const FRIDGE_INTERIOR_STOCK_SLOTS = [
+    { x: 0.92, y: 1.02, z: 0.42, rotY: Math.PI * 0.5 },
+    { x: 0.92, y: 1.02, z: 0.08, rotY: Math.PI * 0.5 },
+    { x: 0.92, y: 1.02, z: -0.28, rotY: Math.PI * 0.5 },
+    { x: 1.12, y: 1.02, z: 0.25, rotY: Math.PI * 0.5 },
+    { x: 1.12, y: 1.02, z: -0.12, rotY: Math.PI * 0.5 }
+  ];
 
   // 道具 slot 挂载在锚点上的局部偏移（相对锚点原点，Y≈手高）
   const PROP_SLOT_OFFSET = new THREE.Vector3(0, 1, 0);
@@ -289,6 +307,65 @@ export function createSceneManager({ logger }) {
     });
   }
 
+  function setFridgeBottleStockCount(count) {
+    const max = fridgeStockBottles.length;
+    if (max === 0) return;
+    const n = THREE.MathUtils.clamp(Math.floor(count), 0, max);
+    fridgeStockVisibleCount = n;
+    fridgeStockBottles.forEach((group, i) => {
+      group.visible = i < n;
+    });
+  }
+
+  function takeOneFridgeStockBottle() {
+    if (fridgeStockBottles.length === 0) return;
+    setFridgeBottleStockCount(fridgeStockVisibleCount - 1);
+  }
+
+  async function buildFridgeInteriorStock(fridgeRoot) {
+    fridgeStockBottles.length = 0;
+    fridgeStockVisibleCount = 0;
+
+    let hasCanFridgeBody = false;
+    fridgeRoot.traverse((node) => {
+      if (node.name === "Environment_CanFridge") hasCanFridgeBody = true;
+    });
+    if (hasCanFridgeBody) {
+      logger.log("[冰箱] Environment_CanFridge 已含罐装内饰，跳过克隆水瓶");
+      return;
+    }
+
+    let bodyNode = fridgeRoot;
+    fridgeRoot.traverse((node) => {
+      if (node.name === "Environment_Fridge") bodyNode = node;
+    });
+
+    const gltf = await loadGLB(BOTTLE_MODEL_URL);
+    const stockRoot = new THREE.Group();
+    stockRoot.name = "FridgeInteriorStock";
+
+    for (const slot of FRIDGE_INTERIOR_STOCK_SLOTS) {
+      const wrap = new THREE.Group();
+      const clone = gltf.scene.clone(true);
+      clone.scale.setScalar(FRIDGE_INTERIOR_BOTTLE_SCALE);
+      clone.position.y = BOTTLE_STYLE_POS_Y;
+      clone.traverse((child) => {
+        if (!child.isMesh) return;
+        child.castShadow = true;
+        child.receiveShadow = true;
+      });
+      wrap.add(clone);
+      wrap.position.set(slot.x, slot.y, slot.z);
+      wrap.rotation.y = slot.rotY ?? 0;
+      stockRoot.add(wrap);
+      fridgeStockBottles.push(wrap);
+    }
+
+    bodyNode.add(stockRoot);
+    setFridgeBottleStockCount(fridgeStockBottles.length);
+    logger.log(`[冰箱] 内饰水瓶 ${fridgeStockBottles.length} 个`);
+  }
+
   async function attachActorModel(plan) {
     const gltf = await loadGLB(plan.url);
     const model = gltf.scene;
@@ -331,15 +408,23 @@ export function createSceneManager({ logger }) {
       model.traverse((node) => {
         if (foundDoor || !node?.name) return;
         const n = String(node.name).toLowerCase();
-        if (n.includes("environment_fridge_door")) foundDoor = node;
-        else if (n.includes("fridge") && n.includes("door")) foundDoor = node;
+        const isFridgeDoor =
+          n.includes("environment_fridge_door") ||
+          n.includes("environment_canfridge_door") ||
+          (n.includes("door") && (n.includes("fridge") || n.includes("canfridge")));
+        if (isFridgeDoor) foundDoor = node;
       });
       if (foundDoor) {
         fridgeDoorNode = foundDoor;
         fridgeDoorClosedY = foundDoor.rotation.y;
         logger.log(`[冰箱] 门节点已定位：${foundDoor.name}`);
       } else {
-        logger.log("[冰箱] 未找到门节点 Environment_Fridge_Door");
+        logger.log("[冰箱] 未找到门节点（Fridge_Door / CanFridge_Door）");
+      }
+      try {
+        await buildFridgeInteriorStock(model);
+      } catch (err) {
+        logger.log(`[冰箱] 内饰水瓶加载失败: ${err?.message || err}`);
       }
     }
 
@@ -1306,11 +1391,7 @@ export function createSceneManager({ logger }) {
         // 将世界坐标转为 slot 的局部坐标
         entry.slot.worldToLocal(boneWorldPos);
 
-        // 加上适当的偏移量，让盘子在手的正上方
-        // 这里基于机器人的局部坐标系：Y 是上，Z 是前，X 是左右
-        boneWorldPos.y -= 0.5; // 托高一点
-        boneWorldPos.z -= 0.2; // 减少前探，水瓶更靠近手部
-        boneWorldPos.x -= 0.2; // 进一步向机器人的右手边靠多一点
+        boneWorldPos.add(HAND_TRACK_BONE_OFFSET);
 
         // 平滑插值，消除骨骼动画带来的高频抖动
         entry.current.position.lerp(boneWorldPos, 1);
@@ -1322,10 +1403,7 @@ export function createSceneManager({ logger }) {
           entry.trackingBone.getWorldQuaternion(boneWorldQuat);
           entry.slot.getWorldQuaternion(slotWorldQuat);
           localTargetQuat.copy(slotWorldQuat).invert().multiply(boneWorldQuat);
-          // 新增：握持姿态偏移（90°）
-          const gripOffset = new THREE.Quaternion().setFromEuler(
-             new THREE.Euler(0, 0, Math.PI / 2) // 不对就改成 X/Y 轴试
-          );
+          const gripOffset = new THREE.Quaternion().setFromEuler(WATER_HAND_GRIP_EULER);
           localTargetQuat.multiply(gripOffset);
           entry.current.quaternion.slerp(localTargetQuat, 0.18);
         } else {
@@ -1399,6 +1477,8 @@ export function createSceneManager({ logger }) {
     setTableItem,
     clearTableItems,
     setFridgeDoorOpen,
+    setFridgeBottleStockCount,
+    takeOneFridgeStockBottle,
     setGridVisible(visible) {
       gridHelper.visible = Boolean(visible);
     },
