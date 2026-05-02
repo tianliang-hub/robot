@@ -765,19 +765,38 @@ export function createSceneManager({ logger }) {
               propType === "cleanupBottleOnPlate" || propType === "water"
                 ? (part.url === BOTTLE_MODEL_URL ? 1000 : 998)
                 : 999;
+            const isBottlePart = part.url === BOTTLE_MODEL_URL;
             mesh.traverse((child) => {
               if (!child.isMesh) return;
-              if (useEnhancedCarryRender && child.material) {
-                // 如果模型有多个材质，可能是数组
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
+              materials.forEach((mat) => {
+                if (!mat) return;
+                if (propType === "water" && isBottlePart) {
+                  // 送水瓶：黑、不透明，正常深度（与托盘增强渲染区分）
+                  mat.transparent = false;
+                  mat.opacity = 1;
+                  mat.depthTest = true;
+                  mat.depthWrite = true;
+                  if ("alphaMap" in mat) mat.alphaMap = null;
+                  if ("transmission" in mat) mat.transmission = 0;
+                  if (mat.color) mat.color.setHex(0x141414);
+                  if (mat.emissive) mat.emissive.setHex(0x000000);
+                  if ("emissiveIntensity" in mat) mat.emissiveIntensity = 0;
+                } else if (propType === "cleanupBottleOnPlate" && isBottlePart) {
+                  // 收餐叠瓶：保持玻璃感
+                  mat.transparent = true;
+                  mat.opacity = 0.62;
+                  mat.depthTest = true;
+                  mat.depthWrite = false;
+                  if (mat.emissive) mat.emissive.setHex(0x000000);
+                  if ("emissiveIntensity" in mat) mat.emissiveIntensity = 0;
+                } else if (useEnhancedCarryRender) {
                   mat.depthTest = false;
-                  // 让材质亮一点，避免完全没有光照时发黑
                   if (mat.emissive !== undefined) {
                     mat.emissive.copy(mat.color).multiplyScalar(0.2);
                   }
-                });
-              }
+                }
+              });
               child.renderOrder = carryRenderOrder;
               child.castShadow = true;
               child.receiveShadow = true;
