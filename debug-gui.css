@@ -1,0 +1,41 @@
+/* 覆盖 lil-gui 注入样式：与主界面浅暖色一致（子文件夹 .lil-gui 也需单独覆盖变量） */
+
+.lil-gui.debug-gui-theme,
+.lil-gui.debug-gui-theme .lil-gui {
+  --background-color: rgba(244, 238, 228, 0.96);
+  --text-color: #2a2318;
+  --title-background-color: rgba(238, 232, 222, 0.98);
+  --title-text-color: #2d8ba8;
+  --widget-color: rgba(252, 248, 242, 0.98);
+  --hover-color: rgba(236, 228, 214, 0.98);
+  --focus-color: rgba(45, 139, 168, 0.2);
+  --number-color: #2d8ba8;
+  --string-color: #2d9b6a;
+  --font-family: "Consolas", "Microsoft YaHei", "Segoe UI", monospace, sans-serif;
+  --font-family-mono: Consolas, "Microsoft YaHei", monospace;
+  --widget-border-radius: 6px;
+}
+
+.lil-gui.debug-gui-theme.lil-auto-place {
+  border: 1px solid rgba(120, 100, 80, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(60, 45, 30, 0.1);
+  overflow: hidden;
+  top: 72px;
+}
+
+.lil-gui.debug-gui-theme.lil-root > .lil-title {
+  border-bottom: 1px solid rgba(120, 100, 80, 0.15);
+  letter-spacing: 0.3px;
+}
+
+@media (hover: hover) {
+  .lil-gui.debug-gui-theme .lil-controller.lil-color .lil-display:hover:before {
+    border-color: rgba(120, 100, 80, 0.28);
+  }
+}
+
+.lil-gui.debug-gui-theme > .lil-children::-webkit-scrollbar-thumb,
+.lil-gui.debug-gui-theme .lil-children::-webkit-scrollbar-thumb {
+  background: rgba(120, 100, 80, 0.35);
+}

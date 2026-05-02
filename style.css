@@ -1,21 +1,22 @@
 :root {
-  --bg-main: #121920;
-  --bg-panel: rgba(20, 28, 36, 0.78);
-  --bg-card: rgba(15, 22, 30, 0.78);
-  --bg-float: rgba(11, 17, 24, 0.94);
-  --bg-input: rgba(8, 13, 20, 0.9);
-  --text-main: #d4e8f0;
-  --text-sub: #9ab7c3;
-  --text-muted: #76909b;
-  --accent: #59c8f6;
-  --accent-soft: rgba(89, 200, 246, 0.18);
-  --accent-green: #4fd38f;
-  --smart: #7f73ff;
-  --warning: #f0b564;
-  --danger: #f26f7d;
-  --neutral: #9ca8b0;
-  --border: rgba(117, 161, 180, 0.28);
-  --border-strong: rgba(134, 191, 214, 0.34);
+  /* 浅亮色主题：米杏 / 暖灰，避免纯白 */
+  --bg-main: #e8e0d4;
+  --bg-panel: rgba(238, 232, 222, 0.94);
+  --bg-card: rgba(244, 238, 228, 0.92);
+  --bg-float: rgba(250, 246, 238, 0.97);
+  --bg-input: rgba(252, 248, 242, 0.96);
+  --text-main: #2a2318;
+  --text-sub: #5a5147;
+  --text-muted: #7a7168;
+  --accent: #2d8ba8;
+  --accent-soft: rgba(45, 139, 168, 0.14);
+  --accent-green: #2d9b6a;
+  --smart: #6b5cb5;
+  --warning: #c77a20;
+  --danger: #c94a58;
+  --neutral: #8a8278;
+  --border: rgba(120, 100, 80, 0.22);
+  --border-strong: rgba(100, 85, 65, 0.32);
   --radius-panel: 12px;
   --radius-card: 10px;
   --radius-control: 8px;
@@ -31,7 +32,7 @@ html,
 body {
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at top, #17232c 0%, var(--bg-main) 46%);
+  background: radial-gradient(ellipse 120% 90% at 50% 0%, #f5efe6 0%, #ebe3d6 38%, var(--bg-main) 72%);
   color: var(--text-main);
   font-family: "Consolas", "Microsoft YaHei", "Segoe UI", monospace, sans-serif;
 }
@@ -52,8 +53,8 @@ body {
   padding: 0 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
-  background: linear-gradient(160deg, rgba(59, 111, 144, 0.22), rgba(36, 73, 56, 0.14));
-  box-shadow: inset 0 1px 0 rgba(212, 232, 240, 0.08);
+  background: linear-gradient(165deg, rgba(255, 248, 238, 0.95), rgba(235, 225, 208, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .top-bar h1 {
@@ -77,7 +78,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
   background: var(--bg-panel);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 6px 18px rgba(60, 45, 30, 0.08);
 }
 
 .side-panel {
@@ -140,10 +141,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 1px solid rgba(117, 161, 180, 0.2);
+  border: 1px solid rgba(120, 100, 80, 0.18);
   border-radius: 8px;
   padding: 8px;
-  background: rgba(13, 20, 27, 0.66);
+  background: rgba(252, 248, 242, 0.72);
 }
 
 .table-head {
@@ -154,7 +155,7 @@ body {
 }
 
 .table-head h4 {
-  color: #bdd8e3;
+  color: var(--text-main);
   font-size: 13px;
   font-weight: 600;
 }
@@ -167,7 +168,7 @@ body {
 
 .table-state {
   font-weight: 700;
-  color: #d9eef8;
+  color: var(--text-main);
 }
 
 .table-state.waiting {
@@ -242,8 +243,8 @@ button {
 #scenario-select:focus,
 #chat-input:focus,
 #chat-mode-select:focus {
-  border-color: rgba(110, 198, 235, 0.68);
-  box-shadow: 0 0 0 2px rgba(89, 200, 246, 0.15);
+  border-color: rgba(160, 125, 85, 0.55);
+  box-shadow: 0 0 0 2px rgba(180, 150, 110, 0.2);
 }
 
 #chat-mode-select {
@@ -253,8 +254,8 @@ button {
 .task-btn {
   min-height: 34px;
   border-radius: var(--radius-control);
-  border: 1px solid rgba(103, 177, 209, 0.46);
-  background: rgba(71, 132, 163, 0.2);
+  border: 1px solid rgba(160, 135, 105, 0.35);
+  background: rgba(245, 238, 228, 0.92);
   color: var(--text-main);
   padding: 6px 8px;
   cursor: pointer;
@@ -262,29 +263,29 @@ button {
 }
 
 .task-btn:hover {
-  border-color: rgba(126, 204, 238, 0.68);
-  background: rgba(83, 158, 194, 0.3);
+  border-color: rgba(140, 120, 95, 0.45);
+  background: rgba(238, 228, 212, 0.98);
   transform: translateY(-1px);
 }
 
 .task-btn.emergency {
-  border-color: rgba(242, 111, 125, 0.55);
-  background: rgba(142, 58, 68, 0.32);
+  border-color: rgba(200, 90, 100, 0.45);
+  background: rgba(252, 232, 232, 0.95);
 }
 
 .task-btn.checkout {
-  border-color: rgba(240, 181, 100, 0.56);
-  background: rgba(126, 89, 44, 0.34);
+  border-color: rgba(200, 150, 80, 0.45);
+  background: rgba(252, 244, 228, 0.95);
 }
 
 .task-btn.cleanup {
-  border-color: rgba(149, 163, 170, 0.56);
-  background: rgba(87, 100, 108, 0.3);
+  border-color: rgba(130, 125, 118, 0.4);
+  background: rgba(240, 238, 234, 0.95);
 }
 
 .task-btn.smart {
-  border-color: rgba(127, 115, 255, 0.58);
-  background: rgba(90, 78, 186, 0.34);
+  border-color: rgba(120, 100, 180, 0.4);
+  background: rgba(242, 238, 252, 0.95);
 }
 
 .task-btn:disabled {
@@ -300,7 +301,7 @@ button {
 
 .status {
   font-weight: 700;
-  color: #bdd8e3;
+  color: var(--text-main);
 }
 
 .status.idle {
@@ -338,9 +339,9 @@ button {
   max-height: none;
   min-height: 0;
   overflow-y: auto;
-  border: 1px solid rgba(117, 161, 180, 0.2);
+  border: 1px solid rgba(120, 100, 80, 0.2);
   border-radius: 8px;
-  background: rgba(10, 16, 22, 0.72);
+  background: rgba(252, 248, 242, 0.85);
   padding: 6px 8px;
 }
 
@@ -388,7 +389,7 @@ button {
 }
 
 .overlay-title {
-  color: var(--accent-green);
+  color: var(--accent);
   font-size: 13px;
   letter-spacing: 0.25px;
 }
@@ -396,10 +397,10 @@ button {
 #loading-indicator {
   pointer-events: auto;
   font-size: 12px;
-  color: #b4d4e0;
-  border: 1px solid rgba(117, 161, 180, 0.28);
+  color: var(--text-sub);
+  border: 1px solid rgba(120, 100, 80, 0.28);
   border-radius: 7px;
-  background: rgba(8, 13, 20, 0.76);
+  background: rgba(252, 248, 242, 0.92);
   padding: 4px 8px;
 }
 
@@ -441,8 +442,8 @@ button {
 .float-head,
 .float-foot {
   padding: 9px 10px;
-  border-bottom: 1px solid rgba(117, 161, 180, 0.2);
-  background: rgba(22, 33, 44, 0.76);
+  border-bottom: 1px solid rgba(120, 100, 80, 0.18);
+  background: rgba(250, 246, 240, 0.92);
 }
 
 .float-foot {
@@ -476,9 +477,9 @@ button {
 .chat-messages {
   height: 178px;
   overflow-y: auto;
-  border: 1px solid rgba(117, 161, 180, 0.2);
+  border: 1px solid rgba(120, 100, 80, 0.22);
   border-radius: 8px;
-  background: rgba(8, 13, 19, 0.78);
+  background: rgba(252, 248, 242, 0.88);
   padding: 8px;
 }
 
@@ -490,11 +491,11 @@ button {
 }
 
 .chat-msg.user {
-  color: #d6ebf4;
+  color: #1a5f8a;
 }
 
 .chat-msg.assistant {
-  color: #9fe1bf;
+  color: #2a7a4f;
 }
 
 .chat-row {
@@ -533,8 +534,8 @@ button {
 
 .log-box {
   border-radius: 9px;
-  border: 1px solid rgba(117, 161, 180, 0.22);
-  background: rgba(10, 16, 22, 0.74);
+  border: 1px solid rgba(120, 100, 80, 0.22);
+  background: rgba(252, 248, 242, 0.88);
   height: 100%;
   overflow-y: auto;
   padding: 8px 10px;
@@ -545,7 +546,7 @@ button {
 }
 
 #log-list li {
-  color: #90b5c3;
+  color: var(--text-sub);
   font-size: 12px;
   line-height: 1.5;
   margin-bottom: 4px;

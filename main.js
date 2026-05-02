@@ -1,4 +1,5 @@
 import GUI from "lil-gui";
+import "./debug-gui.css";
 import { ACTOR_MODEL_PLAN, SCENARIO_PRESETS, STATIC_MODEL_PLAN } from "./src/config/appConfig.js";
 import { createLogger } from "./src/core/logger.js";
 import { createStateStore } from "./src/core/state.js";
@@ -30,11 +31,20 @@ const uiController = createUIController({
 });
 
 function setupBgm() {
-  const src = "/audio/sounovamusic-nagoya-skyline-409156.mp3";
+  const fileName = "Sunset-Landscape.mp3";
+  const src = `${import.meta.env.BASE_URL}audio/${encodeURIComponent(fileName)}`;
   const bgm = new Audio(src);
   bgm.loop = true;
   bgm.volume = 0.3;
   bgm.preload = "auto";
+
+  bgm.addEventListener(
+    "error",
+    () => {
+      logger.log(`[音频] 背景音乐文件加载失败，请确认 public/audio/${fileName} 存在且格式正确。`);
+    },
+    { once: true }
+  );
 
   const tryPlay = async () => {
     try {
@@ -98,6 +108,7 @@ function initDebugPanel() {
     }
   };
   const gui = new GUI({ title: "系统调试台" });
+  gui.domElement.classList.add("debug-gui-theme");
   gui.add(params, "mode", ["showcase", "debug"]).name("模式");
   gui.add(params, "显示导航网格").onChange((value) => {
     sceneManager.setGridVisible?.(value);

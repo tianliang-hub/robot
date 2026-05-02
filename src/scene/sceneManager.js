@@ -75,7 +75,9 @@ export function createSceneManager({ logger }) {
   let startedAt = performance.now();
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x2a2a2a);
+  /* 暖色餐厅环境：深褐木色墙感，非冷灰 */
+  scene.background = new THREE.Color(0xeeeaca);
+  scene.fog = new THREE.Fog(0x4a3f36, 28, 85);
 
   const camera = new THREE.PerspectiveCamera(
     60,
@@ -111,7 +113,7 @@ export function createSceneManager({ logger }) {
 
   const visualGridSize = Math.max(NAV_GRID.width, NAV_GRID.depth);
   const visualGridDivisions = Math.max(24, Math.round(visualGridSize / Math.max(0.4, NAV_GRID.cellSize)));
-  const gridHelper = new THREE.GridHelper(visualGridSize, visualGridDivisions, 0x2dff8f, 0x2f7f95);
+  const gridHelper = new THREE.GridHelper(visualGridSize, visualGridDivisions, 0xc4a882, 0x8b7355);
   gridHelper.position.x = NAV_GRID.origin.x;
   gridHelper.position.z = NAV_GRID.origin.z;
   const gridMaterials = Array.isArray(gridHelper.material) ? gridHelper.material : [gridHelper.material];
@@ -123,8 +125,12 @@ export function createSceneManager({ logger }) {
   scene.add(gridHelper);
 
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(100, 100),
-    new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9, metalness: 0.05 })
+    new THREE.PlaneGeometry(50, 50),
+    new THREE.MeshStandardMaterial({
+      color: 0xeeeaca,
+      roughness: 0.88,
+      metalness: 0.04
+    })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0;
@@ -133,10 +139,13 @@ export function createSceneManager({ logger }) {
   const obstacleMarkerGroup = new THREE.Group();
   scene.add(obstacleMarkerGroup);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-  dirLight.position.set(10, 20, 10);
+  scene.add(new THREE.AmbientLight(0xfff3e6, 0.52));
+  const dirLight = new THREE.DirectionalLight(0xffead0, 1.35);
+  dirLight.position.set(10, 22, 8);
   scene.add(dirLight);
+  const fillLight = new THREE.DirectionalLight(0xe8f4ff, 0.28);
+  fillLight.position.set(-12, 14, -6);
+  scene.add(fillLight);
 
   const anchors = {
     chef: createAnchor(0xff3b3b, SCENE_POINTS.chef),
